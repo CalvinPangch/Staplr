@@ -1,3 +1,6 @@
 # Shell scripts run inside Linux containers: they must keep LF line endings.
 docker/sandbox/stub/* text eol=lf
 *.sh text eol=lf
+# The soul seed text is embedded in a migration and compared byte-for-byte with these files.
+src/server/db/migrations/*.sql text eol=lf
+src/server/modules/souls/defaults/*.md text eol=lf
