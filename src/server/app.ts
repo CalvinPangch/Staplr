@@ -37,6 +37,8 @@ import { registerProjectImpact } from './modules/projects/impact.js';
 import { projectRoutes } from './modules/projects/routes.js';
 import { createProjectService } from './modules/projects/service.js';
 import { createTeamService } from './modules/projects/team-service.js';
+import { ticketRoutes } from './modules/tickets/routes.js';
+import { createTicketService } from './modules/tickets/service.js';
 import { registerAgentImpact } from './modules/agents/impact.js';
 import { createAgentService } from './modules/agents/service.js';
 import { priceRoutes } from './modules/prices/routes.js';
@@ -227,6 +229,12 @@ export function buildApp({
   app.decorate('projects', projects);
   registerProjectImpact({ db, impact: impactRegistry, agents });
   projectRoutes(app, projects, teams);
+  const tickets = createTicketService({ db, clock });
+  app.decorate('tickets', tickets);
+  projects.registerDeleteHook((projectId) =>
+    tickets.removeAllForProject(projectId),
+  );
+  ticketRoutes(app, tickets);
   registerRepositoryChecker(scheduler, { db, clock, sourceControl });
   if (!startup.hasStartupTask('recover-downloads'))
     startup.registerStartupTask('recover-downloads', () =>

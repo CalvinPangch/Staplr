@@ -199,3 +199,17 @@ export const modelPrices = sqliteTable('model_price', {
   effectiveUntil: text('effectiveUntil'),
   source: text('source', { enum: ['default', 'user'] }).notNull(),
 });
+export const tickets = sqliteTable('ticket', {
+  id: text('id').primaryKey(),
+  projectId: text('projectId').notNull(),
+  title: text('title').notNull(),
+  description: text('description').notNull().default(''),
+  status: text('status', {
+    enum: ['new', 'review', 'testing', 'end'],
+  }).notNull(),
+  // 0-based and contiguous within (projectId, status)
+  position: integer('position').notNull(),
+  createdAt: text('createdAt').notNull(),
+  updatedAt: text('updatedAt').notNull(),
+  statusChangedAt: text('statusChangedAt').notNull(),
+});

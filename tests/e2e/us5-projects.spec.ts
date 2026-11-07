@@ -136,6 +136,12 @@ test('adds a project: search a repository, confirm, watch it download', async ({
   await expect(
     page.getByRole('heading', { name: 'Shop', level: 1 }),
   ).toBeVisible();
+  // a new project opens on its Board; the download details are on the Setup tab
+  await expect(page.getByRole('tab', { name: 'Board' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await page.getByRole('tab', { name: 'Setup' }).click();
   await expect(page.getByText('Downloaded').first()).toBeVisible({
     timeout: 30000,
   });
@@ -164,6 +170,7 @@ test('builds the team: PM required, second PM blocked with replace, Ready', asyn
   await signInAsOwner(page);
   await page.goto('/projects');
   await page.getByRole('link', { name: 'Open Shop' }).click();
+  await page.getByRole('tab', { name: 'Setup' }).click();
   await expect(
     page.getByRole('heading', { name: 'Team', level: 2 }),
   ).toBeVisible();
@@ -234,6 +241,7 @@ test('refreshes the repository and changes the base branch', async ({
   await signInAsOwner(page);
   await page.goto('/projects');
   await page.getByRole('link', { name: 'Open Shop' }).click();
+  await page.getByRole('tab', { name: 'Setup' }).click();
   await page.getByRole('button', { name: 'Refresh' }).click();
   await expect(page.getByText('Last updated')).toBeVisible();
   await choose(page, 'Base branch', 'release');
@@ -260,6 +268,7 @@ test('relinks a renamed repository after the old one disappears', async ({
   await page.getByRole('button', { name: 'Check all connections' }).click();
   await page.goto('/projects');
   await page.getByRole('link', { name: 'Open Shop' }).click();
+  await page.getByRole('tab', { name: 'Setup' }).click();
   await expect(
     page.getByText('The repository can no longer be reached'),
   ).toBeVisible({ timeout: 30000 });
@@ -285,6 +294,7 @@ test('deletes a project after a confirmation that says what goes and what stays'
   await signInAsOwner(page);
   await page.goto('/projects');
   await page.getByRole('link', { name: 'Open Shop' }).click();
+  await page.getByRole('tab', { name: 'Setup' }).click();
   await page.getByRole('button', { name: 'Delete project' }).first().click();
   const dialog = page.getByRole('alertdialog');
   await expect(dialog).toContainText('This removes:');

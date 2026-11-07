@@ -20,6 +20,7 @@ import {
   RepositoryPicker,
   type PickedRepository,
 } from '../../features/projects/RepositoryPicker';
+import { Board } from '../../features/board/Board';
 import { TeamRoster } from '../../features/projects/TeamRoster';
 import { formatTime } from '../../features/source-control/api';
 
@@ -118,6 +119,7 @@ function ProjectDetail({ project }: { project: Project }) {
   const [deleting, setDeleting] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [switching, setSwitching] = useState(false);
+  const [tab, setTab] = useState<'board' | 'setup'>('board');
   const downloaded = project.downloadStatus === 'downloaded';
   const connectionId = project.sourceControlConnectionId;
 
@@ -240,78 +242,143 @@ function ProjectDetail({ project }: { project: Project }) {
         </p>
       )}
 
-      <section aria-labelledby="repo-heading" className="flex flex-col gap-3">
-        <h2 id="repo-heading">Repository</h2>
-        <div className="flex flex-wrap items-center gap-2">
-          <StatusBadge status={project.downloadStatus} />
-          {project.downloadStatus === 'downloading' && (
-            <div className="flex min-w-48 flex-1 items-center gap-2">
-              <progress
-                className="h-3 flex-1"
-                max={100}
-                value={project.downloadProgress ?? 0}
-                aria-label="Download progress"
-              />
-              <span>{project.downloadProgress ?? 0}%</span>
-            </div>
-          )}
+      <div
+        role="tablist"
+        aria-label="Project views"
+        className="flex gap-1 border-b border-edge-soft"
+      >
+        {(
+          [
+            ['board', 'Board'],
+            ['setup', 'Setup'],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            id={`tab-${id}`}
+            type="button"
+            role="tab"
+            aria-selected={tab === id}
+            aria-controls={`panel-${id}`}
+            tabIndex={tab === id ? 0 : -1}
+            onClick={() => setTab(id)}
+            onKeyDown={(event) => {
+              if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
+                event.preventDefault();
+                const next = id === 'board' ? 'setup' : 'board';
+                setTab(next);
+                document.getElementById(`tab-${next}`)?.focus();
+              }
+            }}
+            className={`min-h-11 rounded-t-lg border-b-2 px-4 py-2 font-medium ${
+              tab === id
+                ? 'border-primary text-fg'
+                : 'border-transparent text-muted hover:text-fg'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'board' && (
+        <div id="panel-board" role="tabpanel" aria-labelledby="tab-board">
+          <Board projectId={project.id} />
         </div>
-        {project.downloadStatus === 'download_failed' && (
-          <div className="flex flex-col gap-2">
-            <p>{project.downloadError}</p>
+      )}
+
+      {tab === 'setup' && (
+        <div
+          id="panel-setup"
+          role="tabpanel"
+          aria-labelledby="tab-setup"
+          className="flex flex-col gap-4"
+        >
+          <section
+            aria-labelledby="repo-heading"
+            className="flex flex-col gap-3"
+          >
+            <h2 id="repo-heading">Repository</h2>
+            <div className="flex flex-wrap items-center gap-2">
+              <StatusBadge status={project.downloadStatus} />
+              {project.downloadStatus === 'downloading' && (
+                <div className="flex min-w-48 flex-1 items-center gap-2">
+                  <progress
+                    className="h-3 flex-1"
+                    max={100}
+                    value={project.downloadProgress ?? 0}
+                    aria-label="Download progress"
+                  />
+                  <span>{project.downloadProgress ?? 0}%</span>
+                </div>
+              )}
+            </div>
+            {project.downloadStatus === 'download_failed' && (
+              <div className="flex flex-col gap-2">
+                <p>{project.downloadError}</p>
+                <div>
+                  <Button
+                    variant="primary"
+                    busy={busy === 'retry'}
+                    onClick={() => void retry()}
+                  >
+                    Retry download
+                  </Button>
+                </div>
+              </div>
+            )}
+            {downloaded && (
+              <div className="flex flex-wrap items-center gap-3">
+                <p className="text-sm">
+                  Last updated{' '}
+                  {project.lastUpdatedAt ? (
+                    <time dateTime={project.lastUpdatedAt}>
+                      {formatTime(project.lastUpdatedAt)}
+                    </time>
+                  ) : (
+                    'never'
+                  )}
+                </p>
+                <Button
+                  busy={busy === 'refresh'}
+                  onClick={() => void refresh()}
+                >
+                  Refresh
+                </Button>
+              </div>
+            )}
+            {project.lastRefreshError && (
+              <p role="note" className="text-sm text-warning">
+                {project.lastRefreshError}
+              </p>
+            )}
+            <BranchPicker
+              project={project}
+              disabled={!connectionId || switching}
+              onChange={(branch) => void changeBranch(branch)}
+            />
             <div>
-              <Button
-                variant="primary"
-                busy={busy === 'retry'}
-                onClick={() => void retry()}
-              >
-                Retry download
+              <Button onClick={() => setRelinking(true)}>
+                Relink repository
               </Button>
             </div>
-          </div>
-        )}
-        {downloaded && (
-          <div className="flex flex-wrap items-center gap-3">
-            <p className="text-sm">
-              Last updated{' '}
-              {project.lastUpdatedAt ? (
-                <time dateTime={project.lastUpdatedAt}>
-                  {formatTime(project.lastUpdatedAt)}
-                </time>
-              ) : (
-                'never'
-              )}
-            </p>
-            <Button busy={busy === 'refresh'} onClick={() => void refresh()}>
-              Refresh
-            </Button>
-          </div>
-        )}
-        {project.lastRefreshError && (
-          <p role="note" className="text-sm text-warning">
-            {project.lastRefreshError}
-          </p>
-        )}
-        <BranchPicker
-          project={project}
-          disabled={!connectionId || switching}
-          onChange={(branch) => void changeBranch(branch)}
-        />
-        <div>
-          <Button onClick={() => setRelinking(true)}>Relink repository</Button>
-        </div>
-      </section>
+          </section>
 
-      <TeamRoster projectId={project.id} />
+          <TeamRoster projectId={project.id} />
 
-      <section aria-labelledby="danger-heading" className="flex flex-col gap-2">
-        <h2 id="danger-heading">Delete project</h2>
-        <div>
-          <Button variant="danger" onClick={() => setDeleting(true)}>
-            Delete project
-          </Button>
+          <section
+            aria-labelledby="danger-heading"
+            className="flex flex-col gap-2"
+          >
+            <h2 id="danger-heading">Delete project</h2>
+            <div>
+              <Button variant="danger" onClick={() => setDeleting(true)}>
+                Delete project
+              </Button>
+            </div>
+          </section>
         </div>
-      </section>
+      )}
 
       <RelinkDialog
         project={project}
