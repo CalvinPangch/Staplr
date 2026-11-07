@@ -30,6 +30,17 @@ async function openProviders(page: Page) {
 const card = (page: Page, name: string) =>
   page.getByRole('listitem').filter({ hasText: name });
 
+/**
+ * The terminal only paints while it is on screen, so scroll it into view
+ * (it sits below the instructions at 320 px) before reading its text.
+ */
+async function terminalShows(page: Page, text: string) {
+  await page.locator('.xterm').scrollIntoViewIfNeeded();
+  await expect(page.locator('.xterm-rows')).toContainText(text, {
+    timeout: 30000,
+  });
+}
+
 /** Types into the sign-in terminal the way a person would. */
 async function typeInTerminal(page: Page, text: string) {
   await page.locator('.xterm').click();
@@ -119,9 +130,7 @@ test('signs in to Codex through the sandbox terminal', async ({ page }) => {
   await expect(
     page.getByRole('heading', { name: 'Sign in to Codex', level: 1 }),
   ).toBeVisible();
-  await expect(page.getByText('STUB-1234').first()).toBeVisible({
-    timeout: 30000,
-  });
+  await terminalShows(page, 'STUB-1234');
   await expect(page.getByText(/Time left:/)).toBeVisible();
   await axeCheck(page);
 
@@ -130,7 +139,7 @@ test('signs in to Codex through the sandbox terminal', async ({ page }) => {
   await expect(page.getByRole('alert')).toContainText(/No sign-in was found/);
 
   await typeInTerminal(page, 'OK');
-  await expect(page.getByText('Login complete.').first()).toBeVisible();
+  await terminalShows(page, 'Login complete.');
   await page.getByRole('button', { name: 'I’ve finished logging in' }).click();
   await expect(page).toHaveURL(/\/settings\/providers$/);
   await expect(card(page, 'Work Codex').getByText('Connected')).toBeVisible();
@@ -145,9 +154,7 @@ test('cancelling a sign-in saves nothing', async ({ page }) => {
   const dialog = page.getByRole('dialog', { name: 'Add a Codex connection' });
   await dialog.getByLabel('Connection name').fill('Never saved');
   await dialog.getByRole('button', { name: 'Start sign-in' }).click();
-  await expect(page.getByText('STUB-1234').first()).toBeVisible({
-    timeout: 30000,
-  });
+  await terminalShows(page, 'STUB-1234');
   await page.getByRole('button', { name: 'Cancel sign-in' }).click();
   await expect(page).toHaveURL(/\/settings\/providers$/);
   await expect(card(page, 'Never saved')).toHaveCount(0);
@@ -161,11 +168,9 @@ test('an expired Codex login says Needs re-login and Re-login fixes it', async (
   const dialog = page.getByRole('dialog', { name: 'Add a Codex connection' });
   await dialog.getByLabel('Connection name').fill('Old Codex');
   await dialog.getByRole('button', { name: 'Start sign-in' }).click();
-  await expect(page.getByText('STUB-1234').first()).toBeVisible({
-    timeout: 30000,
-  });
+  await terminalShows(page, 'STUB-1234');
   await typeInTerminal(page, 'OK expired=true');
-  await expect(page.getByText('Login complete.').first()).toBeVisible();
+  await terminalShows(page, 'Login complete.');
   await page.getByRole('button', { name: 'I’ve finished logging in' }).click();
   const old = card(page, 'Old Codex');
   await expect(old).toBeVisible();
@@ -176,11 +181,9 @@ test('an expired Codex login says Needs re-login and Re-login fixes it', async (
   ).toHaveCount(0);
 
   await old.getByRole('button', { name: 'Re-login' }).click();
-  await expect(page.getByText('STUB-1234').first()).toBeVisible({
-    timeout: 30000,
-  });
+  await terminalShows(page, 'STUB-1234');
   await typeInTerminal(page, 'OK');
-  await expect(page.getByText('Login complete.').first()).toBeVisible();
+  await terminalShows(page, 'Login complete.');
   await page.getByRole('button', { name: 'I’ve finished logging in' }).click();
   await expect(page).toHaveURL(/\/settings\/providers$/);
   await expect(card(page, 'Old Codex').getByText('Connected')).toBeVisible();

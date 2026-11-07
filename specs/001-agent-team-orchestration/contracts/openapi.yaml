@@ -251,27 +251,42 @@ paths:
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/SoulInput' } } } }
       responses:
         '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Soul' } } } }
+        '409': { $ref: '#/components/responses/Problem' }
         '422': { $ref: '#/components/responses/Problem' }
   /api/souls/{id}:
     parameters: [ { $ref: '#/components/parameters/Id' } ]
-    get: { summary: Get soul, responses: { '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Soul' } } } } } }
+    get:
+      summary: Get soul
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Soul' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
     put:
       summary: Edit a custom soul (defaults are read-only → 403); roleType cannot change
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/SoulInput' } } } }
       responses:
         '200': { description: Updated; body lists affected agents, content: { application/json: { schema: { $ref: '#/components/schemas/Soul' } } } }
         '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
     delete:
       summary: Delete a custom soul (409 with details.agents when in use)
       responses:
         '204': { description: Deleted }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
         '409': { $ref: '#/components/responses/Problem' }
   /api/souls/{id}/copy:
     parameters: [ { $ref: '#/components/parameters/Id' } ]
     post:
       summary: Copy a soul (keeps roleType)
-      requestBody: { content: { application/json: { schema: { type: object, properties: { name: { type: string } } } } } }
-      responses: { '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Soul' } } } } }
+      description: Without a name the copy is called "Copy of <name>", numbered if that is taken.
+      requestBody: { content: { application/json: { schema: { type: object, additionalProperties: false, properties: { name: { type: string, minLength: 1, maxLength: 80 } } } } } }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Soul' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
 
   # ---------- Agents + models (FR-020..024) ----------
   /api/models:
@@ -719,7 +734,7 @@ components:
       properties:
         id: { type: string }
         at: { type: string, format: date-time }
-        action: { type: string, enum: [scc.added, scc.replaced, scc.removed, provider.added, provider.replaced, provider.relogged, provider.removed] }
+        action: { type: string, enum: [scc.added, scc.replaced, scc.removed, provider.added, provider.replaced, provider.relogged, provider.removed, soul.created, soul.updated, soul.copied, soul.deleted] }
         targetType: { type: string }
         targetId: { type: string }
         targetName: { type: string }

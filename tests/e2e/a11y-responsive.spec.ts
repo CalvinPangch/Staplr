@@ -73,6 +73,8 @@ for (const theme of themes) {
         '/audit',
         '/settings/source-control',
         '/settings/providers',
+        '/souls',
+        '/souls/new',
       ]) {
         await page.goto(path);
         await expect(page.locator('main')).toBeVisible();

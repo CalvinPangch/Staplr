@@ -52,6 +52,8 @@ export function ProviderLoginPage() {
   const warned = useRef(false);
 
   const open = session.data?.status === 'in_progress' && !ended;
+  // Only the address matters: a refetched session must not restart the terminal.
+  const terminalUrl = session.data?.terminalUrl;
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
@@ -59,7 +61,7 @@ export function ProviderLoginPage() {
   }, []);
 
   useEffect(() => {
-    if (!open || !session.data || !host.current) return;
+    if (!open || !terminalUrl || !host.current) return;
     const terminal = new Terminal({
       cols: 80,
       rows: 24,
@@ -78,36 +80,48 @@ export function ProviderLoginPage() {
       return true;
     });
     const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const socket = new WebSocket(
-      `${scheme}://${window.location.host}${session.data.terminalUrl}`,
-    );
-    socket.onopen = () =>
-      socket.send(JSON.stringify({ type: 'resize', cols: 80, rows: 24 }));
-    socket.onmessage = (event: MessageEvent<string>) => {
-      const message = JSON.parse(event.data) as ServerMessage;
-      if (message.type === 'output') terminal.write(message.data);
-      else if (message.type === 'expiresAt') setExpiresAt(message.at);
-      else if (message.type === 'status' && message.status !== 'in_progress')
-        setEnded({
-          status: message.status,
-          reason: message.failureReason ?? null,
-        });
-      else if (message.type === 'error') setSocketNote(message.message);
-    };
-    socket.onclose = (event) => {
-      if (event.code === 4409)
-        setSocketNote('This session is already open in another tab.');
-    };
+    let socket: WebSocket | null = null;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    let closing = false;
+    // A previous page or effect may not have released its terminal yet (4409);
+    // try again shortly before telling the person it is open elsewhere.
+    function connect(attempt: number) {
+      const current = new WebSocket(
+        `${scheme}://${window.location.host}${terminalUrl}`,
+      );
+      socket = current;
+      current.onopen = () =>
+        current.send(JSON.stringify({ type: 'resize', cols: 80, rows: 24 }));
+      current.onmessage = (event: MessageEvent<string>) => {
+        const message = JSON.parse(event.data) as ServerMessage;
+        if (message.type === 'output') terminal.write(message.data);
+        else if (message.type === 'expiresAt') setExpiresAt(message.at);
+        else if (message.type === 'status' && message.status !== 'in_progress')
+          setEnded({
+            status: message.status,
+            reason: message.failureReason ?? null,
+          });
+        else if (message.type === 'error') setSocketNote(message.message);
+      };
+      current.onclose = (event) => {
+        if (closing || event.code !== 4409) return;
+        if (attempt < 8) retry = setTimeout(() => connect(attempt + 1), 400);
+        else setSocketNote('This session is already open in another tab.');
+      };
+    }
+    connect(0);
     const input = terminal.onData((data) => {
-      if (socket.readyState === WebSocket.OPEN)
+      if (socket?.readyState === WebSocket.OPEN)
         socket.send(JSON.stringify({ type: 'input', data }));
     });
     return () => {
+      closing = true;
+      clearTimeout(retry);
       input.dispose();
-      socket.close();
+      socket?.close();
       terminal.dispose();
     };
-  }, [open, session.data]);
+  }, [open, terminalUrl]);
 
   // The terminal pushes new deadlines; until it does, use the session's own.
   const expiresAt = liveExpiresAt ?? session.data?.expiresAt ?? null;

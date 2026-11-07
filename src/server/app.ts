@@ -27,6 +27,8 @@ import { realProfile, stubProfile } from './modules/sandbox/profiles.js';
 import { sandboxRoutes } from './modules/sandbox/routes.js';
 import { createSandboxService } from './modules/sandbox/service.js';
 import { terminalRoutes } from './modules/sandbox/terminal.js';
+import { soulRoutes } from './modules/souls/routes.js';
+import { createSoulService } from './modules/souls/service.js';
 import { sourceControlRoutes } from './modules/source-control/routes.js';
 import { createSourceControlService } from './modules/source-control/service.js';
 
@@ -178,6 +180,9 @@ export function buildApp({
     startup.registerStartupTask('recover-sandbox-sessions', () =>
       sandbox.recover(),
     );
+  const souls = createSoulService({ db, clock });
+  app.decorate('souls', souls);
+  soulRoutes(app, souls);
   healthRoutes(app, scheduler);
   registerSourceControlChecker(scheduler, sourceControl);
   registerProviderChecker(scheduler, providers);
@@ -199,4 +204,10 @@ export function buildApp({
       .send(problem('not_found', 'That address does not exist.'));
   });
   return app;
+}
+
+declare module 'fastify' {
+  interface FastifyInstance {
+    souls: ReturnType<typeof createSoulService>;
+  }
 }

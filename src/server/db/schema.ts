@@ -71,3 +71,58 @@ export const errorEvents = sqliteTable('error_event', {
   message: text('message').notNull(),
   stack: text('stack'),
 });
+export const providerConnections = sqliteTable('provider_connection', {
+  id: text('id').primaryKey(),
+  provider: text('provider', { enum: ['claude', 'codex'] }).notNull(),
+  name: text('name').notNull(),
+  authType: text('authType', { enum: ['api_key', 'codex_login'] }).notNull(),
+  apiKeySealed: blob('apiKeySealed', { mode: 'buffer' }),
+  credentialBundleSealed: blob('credentialBundleSealed', { mode: 'buffer' }),
+  credentialRevision: integer('credentialRevision').notNull().default(1),
+  credentialExpiresAt: text('credentialExpiresAt'),
+  status: text('status', { enum: ['connected', 'needs_relogin'] }).notNull(),
+  lastCheckedAt: text('lastCheckedAt'),
+  lastCheckResult: text('lastCheckResult'),
+  createdAt: text('createdAt').notNull(),
+  updatedAt: text('updatedAt').notNull(),
+});
+export const modelAccess = sqliteTable('model_access', {
+  providerConnectionId: text('providerConnectionId').notNull(),
+  model: text('model').notNull(),
+  credentialRevision: integer('credentialRevision').notNull(),
+  catalogRevision: text('catalogRevision').notNull(),
+  availability: text('availability', {
+    enum: ['available', 'unavailable', 'unknown'],
+  }).notNull(),
+  lastVerifiedAt: text('lastVerifiedAt'),
+  lastAttemptAt: text('lastAttemptAt'),
+  checkError: text('checkError'),
+});
+export const sandboxLoginSessions = sqliteTable('sandbox_login_session', {
+  id: text('id').primaryKey(),
+  provider: text('provider', { enum: ['codex'] }).notNull(),
+  name: text('name'),
+  reloginOf: text('reloginOf'),
+  containerId: text('containerId'),
+  status: text('status', {
+    enum: ['in_progress', 'succeeded', 'failed', 'cancelled', 'expired'],
+  }).notNull(),
+  failureReason: text('failureReason'),
+  lastActivityAt: text('lastActivityAt').notNull(),
+  startedAt: text('startedAt').notNull(),
+  endedAt: text('endedAt'),
+  resultConnectionId: text('resultConnectionId'),
+});
+export const souls = sqliteTable('soul', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  roleType: text('roleType', {
+    enum: ['project_manager', 'business_analyst', 'developer', 'qa', 'custom'],
+  }).notNull(),
+  description: text('description').notNull(),
+  instructions: text('instructions').notNull(),
+  isDefault: integer('isDefault', { mode: 'boolean' }).notNull().default(false),
+  copiedFromId: text('copiedFromId'),
+  createdAt: text('createdAt').notNull(),
+  updatedAt: text('updatedAt').notNull(),
+});

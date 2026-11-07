@@ -191,17 +191,17 @@ offered); copy Developer → editable copy with role Developer; editing a defaul
 
 ### Tests for User Story 3 (write first, must fail) ⚠️
 
-- [ ] T081 [P] [US3] Contract tests in `tests/contract/souls.contract.test.ts` for `/api/souls`, `/api/souls/{id}`, `/api/souls/{id}/copy`
-- [ ] T082 [P] [US3] Integration tests in `tests/integration/souls.test.ts`: the four defaults are seeded with `isDefault=true`; creating from scratch with `roleType=project_manager` returns 422; PUT or DELETE on a default returns 403; copy keeps `roleType` and sets `copiedFromId`; `name` "1–80 chars, unique", `description` "≤ 500 chars", `instructions` "≤ 20,000 chars"; `roleType` cannot change on edit
-- [ ] T083 [P] [US3] E2E test in `tests/e2e/us3-souls.spec.ts`: view defaults, create custom, copy Developer and edit; when agents use a soul, show the affected agents before saving; axe check
+- [X] T081 [P] [US3] Contract tests in `tests/contract/souls.contract.test.ts` for `/api/souls`, `/api/souls/{id}`, `/api/souls/{id}/copy`
+- [X] T082 [P] [US3] Integration tests in `tests/integration/souls.test.ts`: the four defaults are seeded with `isDefault=true`; creating from scratch with `roleType=project_manager` returns 422; PUT or DELETE on a default returns 403; copy keeps `roleType` and sets `copiedFromId`; `name` "1–80 chars, unique", `description` "≤ 500 chars", `instructions` "≤ 20,000 chars"; `roleType` cannot change on edit
+- [X] T083 [P] [US3] E2E test in `tests/e2e/us3-souls.spec.ts`: view defaults, create custom, copy Developer and edit; when agents use a soul, show the affected agents before saving; axe check
 
 ### Implementation for User Story 3
 
-- [ ] T084 [P] [US3] Write default soul content in `src/server/modules/souls/defaults/project-manager.md`, `business-analyst.md` (analyzes tickets, asks the user clarifying questions, writes the spec/design), `developer.md`, `qa.md`
-- [ ] T085 [US3] Add table `soul` (`name` "1–80 chars, unique"; `roleType` `project_manager|business_analyst|developer|qa|custom`; `description` "≤ 500 chars"; `instructions` "≤ 20,000 chars (markdown)"; `isDefault`; `copiedFromId`) to `src/server/db/schema.ts` and migration `0004_souls` that seeds the four defaults from T084, with `0004_souls.down.sql`
-- [ ] T086 [P] [US3] Create Zod schemas in `src/shared/schemas/souls.ts` (`SoulInput`; a from-scratch create schema whose `roleType` excludes `project_manager`)
-- [ ] T087 [US3] Implement `src/server/modules/souls/service.ts` (create, update custom only, copy, delete custom only; the in-use guard is added in T095) and routes in `src/server/modules/souls/routes.ts` to pass T081 and T082
-- [ ] T088 [P] [US3] Create the Souls screens `src/web/routes/souls/index.tsx` (library list grouped by role, default badge, Copy, Edit, Delete; `DataState` for loading/empty/error) and `src/web/routes/souls/$soulId.tsx` (editor; defaults shown read-only with a "Copy to customize" action; role picker without Project Manager for new souls; show usedByAgents before editing a used soul) to pass T083
+- [X] T084 [P] [US3] Write default soul content in `src/server/modules/souls/defaults/project-manager.md`, `business-analyst.md` (analyzes tickets, asks the user clarifying questions, writes the spec/design), `developer.md`, `qa.md`
+- [X] T085 [US3] Add table `soul` (`name` "1–80 chars, unique"; `roleType` `project_manager|business_analyst|developer|qa|custom`; `description` "≤ 500 chars"; `instructions` "≤ 20,000 chars (markdown)"; `isDefault`; `copiedFromId`) to `src/server/db/schema.ts` and migration `0004_souls` that seeds the four defaults from T084, with `0004_souls.down.sql`
+- [X] T086 [P] [US3] Create Zod schemas in `src/shared/schemas/souls.ts` (`SoulInput`; a from-scratch create schema whose `roleType` excludes `project_manager`)
+- [X] T087 [US3] Implement `src/server/modules/souls/service.ts` (create, update custom only, copy, delete custom only; the in-use guard is added in T095) and routes in `src/server/modules/souls/routes.ts` to pass T081 and T082
+- [X] T088 [P] [US3] Create the Souls screens `src/web/routes/souls/index.tsx` (library list grouped by role, default badge, Copy, Edit, Delete; `DataState` for loading/empty/error) and `src/web/routes/souls/$soulId.tsx` (editor; defaults shown read-only with a "Copy to customize" action; role picker without Project Manager for new souls; show usedByAgents before editing a used soul) to pass T083
 
 **Checkpoint**: US3 works on its own.
 

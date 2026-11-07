@@ -11,6 +11,8 @@ import { AppShell, NotFound, Pending, StartError } from './routes/__root';
 import { AuditPage } from './routes/audit';
 import { HomePage } from './routes/home';
 import { ProvidersPage } from './routes/settings/providers';
+import { SoulEditorPage } from './routes/souls/$soulId';
+import { SoulsPage } from './routes/souls';
 import { SourceControlPage } from './routes/settings/source-control';
 import { SetupPage } from './routes/setup';
 import { SignInPage } from './routes/sign-in';
@@ -101,6 +103,16 @@ export function createAppRouter(queryClient: QueryClient) {
       getParentRoute: () => rootRoute,
       path: '/settings/providers/login/$sessionId',
       component: ProviderLoginPage,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/souls',
+      component: SoulsPage,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/souls/$soulId',
+      component: SoulEditorPage,
     }),
     createRoute({
       getParentRoute: () => rootRoute,
