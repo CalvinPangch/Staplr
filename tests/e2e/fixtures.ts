@@ -61,6 +61,7 @@ export interface FakeGithubProfile {
     defaultBranch: string;
     branches?: string[];
     push?: boolean;
+    cloneUrl?: string;
   }[];
 }
 

@@ -13,6 +13,8 @@ import { HomePage } from './routes/home';
 import { ProvidersPage } from './routes/settings/providers';
 import { AgentEditorPage } from './routes/agents/$agentId';
 import { AgentsPage } from './routes/agents';
+import { ProjectDetailPage } from './routes/projects/$projectId';
+import { ProjectsPage } from './routes/projects';
 import { SoulEditorPage } from './routes/souls/$soulId';
 import { SoulsPage } from './routes/souls';
 import { SourceControlPage } from './routes/settings/source-control';
@@ -125,6 +127,16 @@ export function createAppRouter(queryClient: QueryClient) {
       getParentRoute: () => rootRoute,
       path: '/agents/$agentId',
       component: AgentEditorPage,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/projects',
+      component: ProjectsPage,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/projects/$projectId',
+      component: ProjectDetailPage,
     }),
     createRoute({
       getParentRoute: () => rootRoute,

@@ -19,6 +19,8 @@ export interface FakeRepo {
   private?: boolean;
   push?: boolean;
   branches?: string[];
+  /** where git clones from; tests point it at a local bare repository */
+  cloneUrl?: string;
 }
 
 export interface GithubProfile {
@@ -155,10 +157,27 @@ export async function startPlatformFake(port = 0): Promise<PlatformFake> {
             full_name: r.fullName,
             default_branch: r.defaultBranch,
             private: r.private ?? false,
+            clone_url: r.cloneUrl ?? `https://github.invalid/${r.fullName}.git`,
             permissions: { push: r.push ?? true, pull: true },
           })),
           links,
         );
+      }
+      const byId = /^\/repositories\/(\d+)$/.exec(rest);
+      if (byId && method === 'GET') {
+        const repo = (profile.repos ?? []).find(
+          (r) => r.id === Number(byId[1]),
+        );
+        if (!repo) return json(response, 404, { message: 'Not Found' });
+        return json(response, 200, {
+          id: repo.id,
+          full_name: repo.fullName,
+          default_branch: repo.defaultBranch,
+          private: repo.private ?? false,
+          clone_url:
+            repo.cloneUrl ?? `https://github.invalid/${repo.fullName}.git`,
+          permissions: { push: repo.push ?? true, pull: true },
+        });
       }
       const repoPath = /^\/repos\/([^/]+)\/([^/]+)(\/.*)?$/.exec(rest);
       if (repoPath) {
@@ -213,18 +232,42 @@ export async function startPlatformFake(port = 0): Promise<PlatformFake> {
         });
       if (rest === '/user' && method === 'GET')
         return json(response, 200, { username: profile.username });
+      const gitlabProject = (r: FakeRepo) => ({
+        id: r.id,
+        path_with_namespace: r.fullName,
+        default_branch: r.defaultBranch,
+        visibility: r.private ? 'private' : 'public',
+        http_url_to_repo:
+          r.cloneUrl ?? `https://gitlab.invalid/${r.fullName}.git`,
+      });
       if (rest === '/projects' && method === 'GET') {
-        const all = profile.repos ?? [];
+        const search = (url.searchParams.get('search') ?? '').toLowerCase();
+        const needsAccess = url.searchParams.get('min_access_level') !== null;
         return json(
           response,
           200,
-          all.map((r) => ({
-            id: r.id,
-            path_with_namespace: r.fullName,
-            default_branch: r.defaultBranch,
-            visibility: r.private ? 'private' : 'public',
-          })),
+          (profile.repos ?? [])
+            .filter((r) => !needsAccess || r.push !== false)
+            .filter((r) => r.fullName.toLowerCase().includes(search))
+            .map(gitlabProject),
         );
+      }
+      const projectPath = /^\/projects\/(\d+)(\/repository\/branches)?$/.exec(
+        rest,
+      );
+      if (projectPath && method === 'GET') {
+        const repo = (profile.repos ?? []).find(
+          (r) => r.id === Number(projectPath[1]),
+        );
+        if (!repo)
+          return json(response, 404, { message: '404 Project Not Found' });
+        return projectPath[2]
+          ? json(
+              response,
+              200,
+              (repo.branches ?? [repo.defaultBranch]).map((name) => ({ name })),
+            )
+          : json(response, 200, gitlabProject(repo));
       }
       return json(response, 404, { message: '404 Not Found' });
     }

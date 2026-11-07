@@ -136,3 +136,52 @@ export const agents = sqliteTable('agent', {
   createdAt: text('createdAt').notNull(),
   updatedAt: text('updatedAt').notNull(),
 });
+export const projects = sqliteTable('project', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  sourceControlConnectionId: text('sourceControlConnectionId'),
+  repoFullName: text('repoFullName').notNull(),
+  repoRemoteId: text('repoRemoteId').notNull(),
+  baseBranch: text('baseBranch').notNull(),
+  downloadStatus: text('downloadStatus', {
+    enum: ['downloading', 'downloaded', 'download_failed'],
+  }).notNull(),
+  downloadError: text('downloadError'),
+  lastUpdatedAt: text('lastUpdatedAt'),
+  lastRefreshError: text('lastRefreshError'),
+  repositoryState: text('repositoryState', {
+    enum: ['ok', 'repository_unavailable', 'base_branch_missing'],
+  })
+    .notNull()
+    .default('ok'),
+  repositoryCheckedAt: text('repositoryCheckedAt'),
+  deletedAt: text('deletedAt'),
+  createdAt: text('createdAt').notNull(),
+  updatedAt: text('updatedAt').notNull(),
+});
+export const teamAssignments = sqliteTable('team_assignment', {
+  projectId: text('projectId').notNull(),
+  agentId: text('agentId').notNull(),
+  assignedAt: text('assignedAt').notNull(),
+});
+export const usageRecords = sqliteTable('usage_record', {
+  id: text('id').primaryKey(),
+  projectId: text('projectId'),
+  agentId: text('agentId'),
+  providerConnectionId: text('providerConnectionId'),
+  projectName: text('projectName').notNull(),
+  agentName: text('agentName').notNull(),
+  agentRole: text('agentRole').notNull(),
+  // no foreign key: the ticket may be deleted later
+  ticketId: text('ticketId').notNull(),
+  // snapshot at write time
+  ticketTitle: text('ticketTitle').notNull(),
+  provider: text('provider', { enum: ['claude', 'codex'] }).notNull(),
+  model: text('model').notNull(),
+  inputTokens: integer('inputTokens'),
+  outputTokens: integer('outputTokens'),
+  startedAt: text('startedAt').notNull(),
+  endedAt: text('endedAt').notNull(),
+  estimatedCostUsd: text('estimatedCostUsd'),
+  priceId: text('priceId'),
+});

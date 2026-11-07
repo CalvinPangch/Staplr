@@ -20,6 +20,13 @@ interface AgentRow {
 
 type ProjectsOfAgent = (agentId: string) => { id: string; name: string }[];
 
+/** Returns the projects whose single-Project-Manager rule a role change would break. */
+type RoleGuard = (
+  agentId: string,
+  from: RoleType,
+  to: RoleType,
+) => { id: string; name: string }[];
+
 const selectAgents = `SELECT a.id, a.name, a.soulId, s.roleType, a.provider, a.providerConnectionId, a.model
   FROM agent a JOIN soul s ON s.id = a.soulId`;
 
@@ -34,6 +41,7 @@ export function createAgentService({
 }) {
   const now = () => new Date(clock()).toISOString();
   const projectSources: ProjectsOfAgent[] = [];
+  const roleGuards: RoleGuard[] = [];
   const projectsOf = (agentId: string) =>
     projectSources
       .flatMap((source) => source(agentId))
@@ -199,8 +207,25 @@ export function createAgentService({
     },
 
     update(id: string, input: AgentInput): Agent {
-      mustFind(id);
+      const before = mustFind(id);
       validate(input, id);
+      if (input.soulId !== before.soulId) {
+        const to = (
+          db
+            .prepare('SELECT roleType FROM soul WHERE id=?')
+            .get(input.soulId) as { roleType: RoleType }
+        ).roleType;
+        const broken = roleGuards.flatMap((guard) =>
+          guard(id, before.roleType, to),
+        );
+        if (broken.length > 0)
+          throw new ServiceError(
+            409,
+            'pm_rule_violation',
+            'Changing this soul would leave a project without exactly one Project Manager. Change the team first.',
+            { projects: broken },
+          );
+      }
       const at = now();
       db.prepare(
         `UPDATE agent SET name=?, soulId=?, provider=?, providerConnectionId=?, model=?, updatedAt=? WHERE id=?`,
@@ -244,9 +269,13 @@ export function createAgentService({
       });
     },
 
-    /** Projects (a later feature) register which teams each agent is on. */
+    /** Projects register which teams each agent is on. */
     registerProjects(source: ProjectsOfAgent): void {
       projectSources.push(source);
+    },
+
+    registerRoleGuard(guard: RoleGuard): void {
+      roleGuards.push(guard);
     },
   };
 }

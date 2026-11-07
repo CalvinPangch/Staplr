@@ -244,5 +244,66 @@ describe('no plaintext secrets (owner account and session)', () => {
       await f.close();
     }
   });
-  it.todo('git clones leave no token in .git/config or remote URLs (US5)');
+  it('git clones leave no token in .git/config, remote URLs, responses or the database', async () => {
+    const { readFile } = await import('node:fs/promises');
+    const { join } = await import('node:path');
+    const { simpleGit } = await import('simple-git');
+    const { createGitRemote } = await import('../fakes/git-remote');
+    const f = await platformFixture();
+    const remote = await createGitRemote(['main']);
+    try {
+      const token = secretFixtures.githubToken;
+      f.fake.github.setToken(token, {
+        login: 'octo',
+        kind: 'classic',
+        scopes: ['repo'],
+        repos: [
+          {
+            id: 61,
+            fullName: 'octo/app',
+            defaultBranch: 'main',
+            branches: ['main'],
+            cloneUrl: remote.url,
+          },
+        ],
+      });
+      const connection = (
+        await f.call('POST', '/api/source-control-connections', {
+          name: 'gh',
+          platform: 'github',
+          token,
+        })
+      ).json().id as string;
+      const created = await f.call('POST', '/api/projects', {
+        sourceControlConnectionId: connection,
+        repoRemoteId: '61',
+      });
+      const id = created.json().id as string;
+      await f.app.projects.whenIdle();
+      await remote.commit('main', 'MORE.md', 'more');
+      const refreshed = await f.call('POST', `/api/projects/${id}/refresh`);
+      expect(refreshed.statusCode).toBe(200);
+
+      const base = join(f.dataDir, 'repos', id, 'base');
+      expect(
+        await readFile(join(base, '.git', 'config'), 'utf8'),
+      ).not.toContain(token);
+      const remotes = await simpleGit(base).raw(['remote', '-v']);
+      expect(remotes).not.toContain(token);
+      expect(remotes).not.toMatch(/\/\/[^/@\s]*@/); // no user:password@ in the address
+      const replies = [
+        created,
+        refreshed,
+        await f.call('GET', '/api/projects'),
+        await f.call('GET', `/api/projects/${id}`),
+        await f.call('GET', '/api/audit-entries'),
+        await f.call('GET', '/api/error-events'),
+      ];
+      for (const reply of replies) expect(reply.body).not.toContain(token);
+      expect(dumpPlaintext(f.db)).not.toContain(token);
+    } finally {
+      await f.close();
+      await remote.close();
+    }
+  });
 });

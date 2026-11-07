@@ -1,11 +1,19 @@
-import { simpleGit, type SimpleGit } from 'simple-git';
+import {
+  simpleGit,
+  type SimpleGit,
+  type SimpleGitProgressEvent,
+} from 'simple-git';
 import { mkdtemp, writeFile, unlink, rmdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+/** Percent (0-100) of a clone, from git --progress output. */
+export type CloneProgress = (percent: number) => void;
+
 async function authenticated<T>(
   token: string,
   cwd: string | undefined,
   run: (git: SimpleGit) => Promise<T>,
+  onProgress?: CloneProgress,
 ): Promise<T> {
   const directory = await mkdtemp(join(tmpdir(), 'staplr-askpass-'));
   const helper = join(directory, 'askpass.sh');
@@ -26,6 +34,16 @@ async function authenticated<T>(
       ...(cwd ? { baseDir: cwd } : {}),
       allowEnvironment: ['GIT_ASKPASS', 'GIT_TERMINAL_PROMPT'],
       unsafe: { allowUnsafeAskPass: true },
+      ...(onProgress
+        ? {
+            progress: ({ stage, progress }: SimpleGitProgressEvent) => {
+              // receiving objects is most of the work; resolving deltas is the rest
+              if (stage === 'receiving') onProgress(Math.round(progress * 0.8));
+              else if (stage === 'resolving')
+                onProgress(80 + Math.round(progress * 0.2));
+            },
+          }
+        : {}),
     }).env({
       ...environment,
       GIT_TERMINAL_PROMPT: '0',
@@ -42,9 +60,41 @@ async function authenticated<T>(
     await rmdir(directory);
   }
 }
-export async function clone(remote: string, target: string, token: string) {
-  await authenticated(token, undefined, async (git) => {
-    await git.clone(remote, target);
+export async function clone(
+  remote: string,
+  target: string,
+  token: string,
+  onProgress?: CloneProgress,
+) {
+  await authenticated(
+    token,
+    undefined,
+    async (git) => {
+      await git.clone(remote, target, onProgress ? ['--progress'] : []);
+    },
+    onProgress,
+  );
+}
+
+/**
+ * Points the base copy at a branch that exists on the remote. Local only: it
+ * needs no token because the branch was fetched by the last clone or refresh.
+ */
+export async function checkoutBranch(path: string, branch: string) {
+  const git = simpleGit({ baseDir: path });
+  await git.raw(['checkout', '-B', branch, `refs/remotes/origin/${branch}`]);
+}
+
+/** True when the base copy knows the branch from the remote. */
+export async function hasRemoteBranch(path: string, branch: string) {
+  const git = simpleGit({ baseDir: path });
+  const output = await git.raw(['branch', '-r', '--list', `origin/${branch}`]);
+  return output.trim() !== '';
+}
+/** Fetches every branch from the remote without touching the working tree. */
+export async function fetchRemote(path: string, token: string) {
+  await authenticated(token, path, async (git) => {
+    await git.fetch(['--prune', 'origin']);
   });
 }
 export async function fetchAndFastForward(

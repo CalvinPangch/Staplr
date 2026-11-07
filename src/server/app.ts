@@ -28,6 +28,15 @@ import { sandboxRoutes } from './modules/sandbox/routes.js';
 import { createSandboxService } from './modules/sandbox/service.js';
 import { terminalRoutes } from './modules/sandbox/terminal.js';
 import { agentRoutes } from './modules/agents/routes.js';
+import { registerRepositoryChecker } from './modules/health/checkers/repository.js';
+import {
+  createDownloadManager,
+  type FreeBytes,
+} from './modules/projects/download.js';
+import { registerProjectImpact } from './modules/projects/impact.js';
+import { projectRoutes } from './modules/projects/routes.js';
+import { createProjectService } from './modules/projects/service.js';
+import { createTeamService } from './modules/projects/team-service.js';
 import { registerAgentImpact } from './modules/agents/impact.js';
 import { createAgentService } from './modules/agents/service.js';
 import { priceRoutes } from './modules/prices/routes.js';
@@ -57,7 +66,10 @@ export function buildApp({
   impactRegistry = defaultImpactRegistry,
   sandboxDriver = null,
   startup = defaultStartupRegistry,
+  freeBytes,
 }: {
+  /** Free space at the data folder; tests replace it to simulate a full disk. */
+  freeBytes?: FreeBytes;
   /** Docker (or a fake) for Codex sign-in sandboxes; null when Docker is unavailable. */
   sandboxDriver?: SandboxDriver | null;
   /** Recovery tasks run before the server listens. */
@@ -192,6 +204,29 @@ export function buildApp({
   registerAgentImpact({ db, impact: impactRegistry, souls });
   agentRoutes(app, agents);
   priceRoutes(app, providers);
+  const downloads = createDownloadManager({
+    db,
+    config,
+    clock,
+    sourceControl,
+    ...(freeBytes ? { freeBytes } : {}),
+  });
+  const projects = createProjectService({
+    db,
+    clock,
+    sourceControl,
+    agents,
+    downloads,
+  });
+  const teams = createTeamService({ db, clock, agents, projects });
+  app.decorate('projects', projects);
+  registerProjectImpact({ db, impact: impactRegistry, agents });
+  projectRoutes(app, projects, teams);
+  registerRepositoryChecker(scheduler, { db, clock, sourceControl });
+  if (!startup.hasStartupTask('recover-downloads'))
+    startup.registerStartupTask('recover-downloads', () =>
+      projects.recoverDownloads(),
+    );
   healthRoutes(app, scheduler);
   registerSourceControlChecker(scheduler, sourceControl);
   registerProviderChecker(scheduler, providers);

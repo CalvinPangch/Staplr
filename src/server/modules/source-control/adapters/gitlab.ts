@@ -1,6 +1,12 @@
 import { Gitlab } from '@gitbeaker/rest';
 import type { PermissionId } from '../../../../shared/schemas/source-control.js';
-import type { PlatformAdapter, VerifyResult } from './types.js';
+import {
+  maxPages,
+  pageSize,
+  type PlatformAdapter,
+  type RepositoryFailure,
+  type VerifyResult,
+} from './types.js';
 
 /** `api` covers everything; the repository scopes cover cloning and pushing only. */
 function permissionsFor(scopes: string[]): PermissionId[] {
@@ -23,8 +29,75 @@ function statusOf(error: unknown): number | undefined {
   return undefined;
 }
 
+function repositoryFailure(error: unknown): RepositoryFailure {
+  const status = statusOf(error);
+  if (status === 401 || status === 403) return 'invalid';
+  if (status === 404) return 'not_found';
+  return 'unavailable';
+}
+
+interface GitlabProject {
+  id: number;
+  path_with_namespace: string;
+  default_branch?: string | null;
+  visibility?: string;
+  http_url_to_repo?: string;
+}
+
+const summarize = (project: GitlabProject) => ({
+  remoteId: String(project.id),
+  fullName: project.path_with_namespace,
+  defaultBranch: project.default_branch ?? 'main',
+  private: project.visibility !== 'public',
+});
+
 export function createGitlabAdapter(baseUrl: string): PlatformAdapter {
   return {
+    /** Member projects with at least developer access (30), searched by the GitLab server. */
+    async listRepositories(token, query) {
+      const api = new Gitlab({ host: baseUrl, token });
+      try {
+        const projects = (await api.Projects.all({
+          membership: true,
+          minAccessLevel: 30,
+          perPage: pageSize,
+          maxPages,
+          ...(query?.trim() ? { search: query.trim() } : {}),
+        })) as unknown as GitlabProject[];
+        return { ok: true, repositories: projects.map(summarize) };
+      } catch (error) {
+        return { ok: false, failure: repositoryFailure(error) };
+      }
+    },
+    async getRepository(token, remoteId) {
+      const api = new Gitlab({ host: baseUrl, token });
+      try {
+        const project = (await api.Projects.show(
+          remoteId,
+        )) as unknown as GitlabProject;
+        return {
+          ok: true,
+          repository: {
+            ...summarize(project),
+            cloneUrl: project.http_url_to_repo ?? '',
+          },
+        };
+      } catch (error) {
+        return { ok: false, failure: repositoryFailure(error) };
+      }
+    },
+    async listBranches(token, remoteId) {
+      const api = new Gitlab({ host: baseUrl, token });
+      try {
+        const branches = (await api.Branches.all(remoteId, {
+          perPage: pageSize,
+          maxPages,
+        })) as unknown as { name: string }[];
+        return { ok: true, branches: branches.map((b) => b.name) };
+      } catch (error) {
+        return { ok: false, failure: repositoryFailure(error) };
+      }
+    },
     async verifyToken(token): Promise<VerifyResult> {
       const api = new Gitlab({ host: baseUrl, token });
       try {

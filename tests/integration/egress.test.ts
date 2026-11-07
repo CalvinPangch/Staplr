@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createInstallation } from '../../src/server/main';
 import { listAnthropicModels } from '../../src/server/modules/providers/anthropic';
+import { isAllowedCloneUrl } from '../../src/server/modules/projects/download';
 import { createGithubAdapter } from '../../src/server/modules/source-control/adapters/github';
 import { createGitlabAdapter } from '../../src/server/modules/source-control/adapters/gitlab';
 
@@ -124,5 +125,43 @@ describe('outbound traffic from the Staplr process', () => {
     ).toEqual([]);
     server.resetHandlers();
   });
-  it.todo('repository clones contact only the connection host (US5)');
+  it('repository clones only ever go to the connection platform', () => {
+    const test = { testMode: false, githubApiUrl: 'https://api.github.com' };
+    const github = {
+      platform: 'github' as const,
+      baseUrl: 'https://api.github.com',
+    };
+    const gitlab = {
+      platform: 'gitlab' as const,
+      baseUrl: 'https://git.example.org',
+    };
+    expect(
+      isAllowedCloneUrl('https://github.com/octo/app.git', github, test),
+    ).toBe(true);
+    expect(
+      isAllowedCloneUrl('https://evil.example/octo/app.git', github, test),
+    ).toBe(false);
+    expect(
+      isAllowedCloneUrl('http://github.com/octo/app.git', github, test),
+    ).toBe(false);
+    expect(
+      isAllowedCloneUrl('https://git.example.org/team/app.git', gitlab, test),
+    ).toBe(true);
+    expect(
+      isAllowedCloneUrl('https://github.com/octo/app.git', gitlab, test),
+    ).toBe(false);
+    expect(isAllowedCloneUrl('/srv/repos/app.git', github, test)).toBe(false);
+    expect(isAllowedCloneUrl('file:///srv/repos/app.git', github, test)).toBe(
+      false,
+    );
+    // test mode lets fixtures use local remotes, but still not arbitrary hosts
+    const testing = {
+      testMode: true,
+      githubApiUrl: 'http://127.0.0.1:4330/github',
+    };
+    expect(isAllowedCloneUrl('/tmp/remote.git', github, testing)).toBe(true);
+    expect(
+      isAllowedCloneUrl('https://evil.example/octo/app.git', github, testing),
+    ).toBe(false);
+  });
 });

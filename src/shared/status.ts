@@ -34,6 +34,7 @@ export const readinessReasonCodes = [
   'needs_relogin',
   'no_provider_connection',
   'model_unavailable',
+  'downloading',
   'download_failed',
   'repository_unavailable',
   'base_branch_missing',

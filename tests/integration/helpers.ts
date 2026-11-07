@@ -1,4 +1,7 @@
 import Database from 'better-sqlite3';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { parseConfig } from '../../src/server/config';
 import { migrateUp } from '../../src/server/db/migrate';
 import { buildApp } from '../../src/server/app';
@@ -24,6 +27,7 @@ export async function fixture(
     impactRegistry?: ImpactRegistry;
     driver?: SandboxDriver | null;
     startup?: StartupRegistry;
+    freeBytes?: () => Promise<number>;
   } = {},
 ) {
   const db = new Database(':memory:');
@@ -47,6 +51,7 @@ export async function fixture(
     impactRegistry: options.impactRegistry ?? createImpactRegistry(),
     sandboxDriver: options.driver ?? null,
     startup: options.startup ?? createStartupRegistry(),
+    ...(options.freeBytes ? { freeBytes: options.freeBytes } : {}),
   });
   return {
     db,
@@ -76,8 +81,13 @@ export async function signedIn(f: Awaited<ReturnType<typeof fixture>>) {
 
 /** An installation signed in as the owner, wired to fake GitHub/GitLab and Anthropic APIs. */
 export async function platformFixture(
-  options: { driver?: SandboxDriver; startup?: StartupRegistry } = {},
+  options: {
+    driver?: SandboxDriver;
+    startup?: StartupRegistry;
+    freeBytes?: () => Promise<number>;
+  } = {},
 ) {
+  const dataDir = await mkdtemp(join(tmpdir(), 'staplr-data-'));
   const fake = await startPlatformFake();
   const anthropic = await startAnthropicFake();
   const impactRegistry = createImpactRegistry();
@@ -86,10 +96,12 @@ export async function platformFixture(
       STAPLR_TEST_GITHUB_API_URL: fake.githubApiUrl,
       STAPLR_TEST_ANTHROPIC_API_URL: anthropic.url,
       STAPLR_CODEX_PROFILE: 'stub',
+      DATA_DIR: dataDir,
     },
     impactRegistry,
     driver: options.driver ?? null,
     ...(options.startup ? { startup: options.startup } : {}),
+    ...(options.freeBytes ? { freeBytes: options.freeBytes } : {}),
   });
   const cookie = await signedIn(f);
   const call = (
@@ -111,12 +123,16 @@ export async function platformFixture(
     impactRegistry,
     cookie,
     call,
+    dataDir,
     async close() {
       f.scheduler.stop();
+      // background downloads must finish before their folders disappear
+      await f.app.projects?.whenIdle?.();
       await f.app.close();
       f.db.close();
       await fake.close();
       await anthropic.close();
+      await rm(dataDir, { recursive: true, force: true });
     },
   };
 }

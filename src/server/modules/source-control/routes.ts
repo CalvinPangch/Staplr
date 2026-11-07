@@ -6,6 +6,7 @@ import {
   sourceControlCreateSchema,
   sourceControlUpdateSchema,
 } from '../../../shared/schemas/source-control.js';
+import { repositoryError } from './errors.js';
 import type { SourceControlService } from './service.js';
 
 const idParams = z.object({ id: z.string().min(1).max(100) });
@@ -81,4 +82,41 @@ export function sourceControlRoutes(
       return fail(reply, error);
     }
   });
+
+  const queryParams = z.object({ q: z.string().max(200).optional() });
+  const branchParams = idParams.extend({
+    repoRemoteId: z.string().min(1).max(100),
+  });
+
+  app.get(`${base}/:id/repositories`, async (request, reply) => {
+    const params = idParams.safeParse(request.params);
+    const query = queryParams.safeParse(request.query);
+    if (!params.success) return invalid(reply, params.error);
+    if (!query.success) return invalid(reply, query.error);
+    try {
+      const result = await service.repositories(params.data.id, query.data.q);
+      if (!result.ok) throw repositoryError(result.failure);
+      return result.repositories;
+    } catch (error) {
+      return fail(reply, error);
+    }
+  });
+
+  app.get(
+    `${base}/:id/repositories/:repoRemoteId/branches`,
+    async (request, reply) => {
+      const params = branchParams.safeParse(request.params);
+      if (!params.success) return invalid(reply, params.error);
+      try {
+        const result = await service.branches(
+          params.data.id,
+          params.data.repoRemoteId,
+        );
+        if (!result.ok) throw repositoryError(result.failure);
+        return result.branches;
+      } catch (error) {
+        return fail(reply, error);
+      }
+    },
+  );
 }

@@ -77,6 +77,7 @@ for (const theme of themes) {
         '/souls/new',
         '/agents',
         '/agents/new',
+        '/projects',
       ]) {
         await page.goto(path);
         await expect(page.locator('main')).toBeVisible();

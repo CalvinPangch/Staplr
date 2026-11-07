@@ -91,6 +91,9 @@ paths:
       summary: Repositories this connection can push to (searchable)
       responses:
         '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Repository' } } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
   /api/source-control-connections/{id}/repositories/{repoRemoteId}/branches:
     parameters:
       - { $ref: '#/components/parameters/Id' }
@@ -99,6 +102,9 @@ paths:
       summary: Branches of a repository (base-branch picker)
       responses:
         '200': { description: OK, content: { application/json: { schema: { type: array, items: { type: string } } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
 
   # ---------- Provider connections + sandbox (FR-006..012) ----------
   /api/provider-connections:
@@ -362,35 +368,54 @@ paths:
                 name: { type: string, minLength: 1, maxLength: 80 }
       responses:
         '202': { description: Created; downloadStatus=downloading, content: { application/json: { schema: { $ref: '#/components/schemas/Project' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
   /api/projects/{id}:
     parameters: [ { $ref: '#/components/parameters/Id' } ]
-    get: { summary: Project with readiness reasons and download progress, responses: { '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Project' } } } } } }
+    get:
+      summary: Project with readiness reasons and download progress
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Project' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
     patch:
       summary: Rename, change base branch, or relink repository
       requestBody: { required: true, content: { application/json: { schema: { type: object, properties: { name: { type: string }, baseBranch: { type: string }, relink: { type: object, properties: { sourceControlConnectionId: { type: string }, repoRemoteId: { type: string } } } } } } } }
       responses:
         '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/Project' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
         '422': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
     delete:
       summary: Delete project (removes code, working copies, team, tickets; keeps agents and usage records)
-      responses: { '204': { description: Deleted } }
+      responses:
+        '204': { description: Deleted }
+        '404': { $ref: '#/components/responses/Problem' }
   /api/projects/{id}/download:
     parameters: [ { $ref: '#/components/parameters/Id' } ]
     post:
       summary: Retry a failed download
-      responses: { '202': { description: Restarted } }
+      responses:
+        '202': { description: Restarted }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
   /api/projects/{id}/refresh:
     parameters: [ { $ref: '#/components/parameters/Id' } ]
     post:
       summary: Pull latest code (fetch + fast-forward base branch)
       responses:
         '200': { description: Refreshed, content: { application/json: { schema: { $ref: '#/components/schemas/Project' } } } }
-        '409': { description: Remote history rewritten or other refresh failure; local copy kept, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { description: Remote history rewritten (code history_rewritten) or the project is not downloaded (code conflict); local copy kept, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
   /api/projects/{id}/team:
     parameters: [ { $ref: '#/components/parameters/Id' } ]
     get:
       summary: Team roster with readiness and missing-role warnings
-      responses: { '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Team' } } } } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Team' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
   /api/projects/{id}/team/{agentId}:
     parameters:
       - { $ref: '#/components/parameters/Id' }
@@ -399,22 +424,29 @@ paths:
       summary: Assign agent (409 code pm_already_assigned when adding a second PM)
       responses:
         '200': { description: Assigned, content: { application/json: { schema: { $ref: '#/components/schemas/Team' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
         '409': { $ref: '#/components/responses/Problem' }
     delete:
       summary: Remove agent from team
-      responses: { '200': { description: Removed, content: { application/json: { schema: { $ref: '#/components/schemas/Team' } } } } }
+      responses:
+        '200': { description: Removed, content: { application/json: { schema: { $ref: '#/components/schemas/Team' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
   /api/projects/{id}/team/replace-project-manager:
     parameters: [ { $ref: '#/components/parameters/Id' } ]
     post:
       summary: Swap the current PM for another PM-role agent in one step
       requestBody: { required: true, content: { application/json: { schema: { type: object, required: [agentId], properties: { agentId: { type: string } } } } } }
-      responses: { '200': { description: Replaced, content: { application/json: { schema: { $ref: '#/components/schemas/Team' } } } } }
+      responses:
+        '200': { description: Replaced, content: { application/json: { schema: { $ref: '#/components/schemas/Team' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
   /api/projects/{id}/finalize-team:
     parameters: [ { $ref: '#/components/parameters/Id' } ]
     post:
       summary: Finish setup (422 code no_project_manager when PM missing)
       responses:
         '200': { description: Finalized, content: { application/json: { schema: { $ref: '#/components/schemas/Project' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
         '422': { $ref: '#/components/responses/Problem' }
 
   # ---------- Ticket board (FR-044..050) ----------
@@ -537,7 +569,7 @@ components:
       type: object
       required: [code]
       properties:
-        code: { type: string, enum: [needs_relogin, no_provider_connection, model_unavailable, download_failed, repository_unavailable, base_branch_missing, source_control_needs_attention, no_project_manager, agent_not_ready] }
+        code: { type: string, enum: [needs_relogin, no_provider_connection, model_unavailable, downloading, download_failed, repository_unavailable, base_branch_missing, source_control_needs_attention, no_project_manager, agent_not_ready] }
         agentId: { type: string }
         message: { type: string }
     SourceControlConnectionCreate:
@@ -660,6 +692,7 @@ components:
         name: { type: string }
         sourceControlConnectionId: { type: [string, 'null'] }
         repoFullName: { type: string }
+        repoRemoteId: { type: string, description: The platform repository id, used to list branches and to relink }
         baseBranch: { type: string }
         downloadStatus: { type: string, enum: [downloading, downloaded, download_failed] }
         downloadProgress: { type: [integer, 'null'], minimum: 0, maximum: 100 }
@@ -741,7 +774,7 @@ components:
       properties:
         id: { type: string }
         at: { type: string, format: date-time }
-        action: { type: string, enum: [scc.added, scc.replaced, scc.removed, provider.added, provider.replaced, provider.relogged, provider.removed, soul.created, soul.updated, soul.copied, soul.deleted, agent.created, agent.updated, agent.deleted] }
+        action: { type: string, enum: [scc.added, scc.replaced, scc.removed, provider.added, provider.replaced, provider.relogged, provider.removed, soul.created, soul.updated, soul.copied, soul.deleted, agent.created, agent.updated, agent.deleted, project.created, project.deleted] }
         targetType: { type: string }
         targetId: { type: string }
         targetName: { type: string }

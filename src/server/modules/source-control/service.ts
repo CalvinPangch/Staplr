@@ -383,6 +383,31 @@ export function createSourceControlService({
         );
     },
 
+    /** Repositories this connection can push to, searched by name. */
+    async repositories(id: string, query?: string) {
+      const row = require(id);
+      return adapterFor(row.platform, row.baseUrl).listRepositories(
+        openBlob(row.tokenSealed, config.masterKey).toString('utf8'),
+        query,
+      );
+    },
+
+    async repository(id: string, remoteId: string) {
+      const row = require(id);
+      return adapterFor(row.platform, row.baseUrl).getRepository(
+        openBlob(row.tokenSealed, config.masterKey).toString('utf8'),
+        remoteId,
+      );
+    },
+
+    async branches(id: string, remoteId: string) {
+      const row = require(id);
+      return adapterFor(row.platform, row.baseUrl).listBranches(
+        openBlob(row.tokenSealed, config.masterKey).toString('utf8'),
+        remoteId,
+      );
+    },
+
     /** Internal only: the plaintext token for a git or API call. */
     decryptTokenForUse(id: string): string {
       return openBlob(require(id).tokenSealed, config.masterKey).toString(

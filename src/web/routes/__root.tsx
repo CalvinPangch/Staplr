@@ -17,6 +17,7 @@ const localHosts = ['localhost', '127.0.0.1', '[::1]'];
 const navItems = [
   { to: '/settings/source-control', label: 'Source control' },
   { to: '/settings/providers', label: 'Providers' },
+  { to: '/projects', label: 'Projects' },
   { to: '/souls', label: 'Souls' },
   { to: '/agents', label: 'Agents' },
   { to: '/audit', label: 'Audit' },
