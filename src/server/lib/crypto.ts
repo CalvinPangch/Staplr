@@ -23,6 +23,23 @@ export function seal(plaintext: Buffer, key?: Buffer): SealedEnvelope {
     authTag: cipher.getAuthTag().toString('base64'),
   };
 }
+/** Seals and serialises for a BLOB column. Never store the plaintext. */
+export function sealToBlob(plaintext: Buffer, key?: Buffer): Buffer {
+  return Buffer.from(JSON.stringify(seal(plaintext, key)), 'utf8');
+}
+export function openBlob(blob: Buffer, key?: Buffer): Buffer {
+  const parsed: unknown = JSON.parse(blob.toString('utf8'));
+  if (
+    !parsed ||
+    typeof parsed !== 'object' ||
+    !('keyVersion' in parsed) ||
+    !('nonce' in parsed) ||
+    !('ciphertext' in parsed) ||
+    !('authTag' in parsed)
+  )
+    throw new Error('Invalid sealed blob');
+  return open(parsed as SealedEnvelope, key);
+}
 export function open(envelope: SealedEnvelope, key?: Buffer): Buffer {
   if (envelope.keyVersion !== 1)
     throw new Error('Unsupported secret key version');

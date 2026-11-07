@@ -14,7 +14,10 @@ import { Button } from '../components/ui/Button';
 const publicPaths = ['/setup', '/sign-in'];
 const localHosts = ['localhost', '127.0.0.1', '[::1]'];
 
-const navItems = [{ to: '/audit', label: 'Audit' }] as const;
+const navItems = [
+  { to: '/settings/source-control', label: 'Source control' },
+  { to: '/audit', label: 'Audit' },
+] as const;
 
 function InsecureBanner() {
   const insecure =

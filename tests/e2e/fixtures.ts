@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, type Page } from '@playwright/test';
+import { expect, type APIRequestContext, type Page } from '@playwright/test';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -22,6 +22,40 @@ const apiPorts: Record<string, number> = { desktop: 4310, mobile: 4311 };
 export function dataDirFor(projectName: string) {
   const id = projectName.replace(/-first-run$/, '');
   return join(tmpdir(), `staplr-e2e-${apiPorts[id] ?? 3000}`);
+}
+
+/** The fake GitHub/GitLab for this project's installation (scripts/dev.mjs). */
+export function fakePlatformUrl(projectName: string) {
+  const id = projectName.replace(/-first-run$/, '');
+  return `http://127.0.0.1:${(apiPorts[id] ?? 4310) + 20}`;
+}
+
+export interface FakeGithubProfile {
+  login: string;
+  kind: 'classic' | 'fine';
+  scopes?: string[];
+  revoked?: boolean;
+  failWith?: number;
+  repos?: {
+    id: number;
+    fullName: string;
+    defaultBranch: string;
+    branches?: string[];
+    push?: boolean;
+  }[];
+}
+
+export async function setFakeGithubToken(
+  request: APIRequestContext,
+  projectName: string,
+  token: string,
+  profile: FakeGithubProfile,
+) {
+  const reply = await request.post(
+    `${fakePlatformUrl(projectName)}/__control/github/token`,
+    { data: { token, profile } },
+  );
+  expect(reply.ok()).toBe(true);
 }
 
 export async function createOwner(page: Page) {

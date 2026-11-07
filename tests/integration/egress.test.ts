@@ -5,6 +5,8 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createInstallation } from '../../src/server/main';
+import { createGithubAdapter } from '../../src/server/modules/source-control/adapters/github';
+import { createGitlabAdapter } from '../../src/server/modules/source-control/adapters/gitlab';
 
 /**
  * FR-043: the Staplr process may contact only the GitHub API, a configured
@@ -68,7 +70,37 @@ describe('outbound traffic from the Staplr process', () => {
     }
   });
 
-  it.todo('GitHub and GitLab adapters contact only their own API hosts (US1)');
+  it('GitHub and GitLab adapters contact only their own API hosts', async () => {
+    server.use(
+      http.get('https://api.github.com/user', () =>
+        HttpResponse.json(
+          { login: 'octo' },
+          { headers: { 'x-oauth-scopes': 'repo' } },
+        ),
+      ),
+      http.get(
+        'https://gitlab.example.com/api/v4/personal_access_tokens/self',
+        () =>
+          HttpResponse.json({ scopes: ['api'], active: true, revoked: false }),
+      ),
+      http.get('https://gitlab.example.com/api/v4/user', () =>
+        HttpResponse.json({ username: 'gl' }),
+      ),
+    );
+    attempted.length = 0;
+    await createGithubAdapter('https://api.github.com').verifyToken('ghp_x');
+    await createGitlabAdapter('https://gitlab.example.com').verifyToken(
+      'glpat-x',
+    );
+    const hosts = new Set(attempted);
+    expect([...hosts].sort()).toEqual(['api.github.com', 'gitlab.example.com']);
+    const outside = [...hosts].filter(
+      (host) => !allowedHosts(['gitlab.example.com']).has(host),
+    );
+    expect(outside).toEqual([]);
+    server.resetHandlers();
+  });
+
   it.todo('Claude key checks contact only api.anthropic.com (US2)');
   it.todo('repository clones contact only the connection host (US5)');
 });

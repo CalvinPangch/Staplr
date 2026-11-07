@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type Database from 'better-sqlite3';
-import { fixture, credentials, origin } from './helpers';
+import { fixture, credentials, origin, platformFixture } from './helpers';
 
 /**
  * SC-004: a known secret must never appear in plaintext in the database
@@ -116,7 +116,45 @@ describe('no plaintext secrets (owner account and session)', () => {
   });
 
   // Added by the story that introduces each credential, before its code:
-  it.todo('GitHub/GitLab token is sealed; only tokenLast4 is ever shown (US1)');
+  it('seals a GitHub token; only tokenLast4 is ever shown', async () => {
+    const f = await platformFixture();
+    try {
+      const token = secretFixtures.githubToken;
+      f.fake.github.setToken(token, {
+        login: 'octo',
+        kind: 'classic',
+        scopes: ['repo'],
+      });
+      const created = await f.call('POST', '/api/source-control-connections', {
+        name: 'work',
+        platform: 'github',
+        token,
+      });
+      expect(created.statusCode).toBe(201);
+      expect(created.json().tokenLast4).toBe(token.slice(-4));
+      const id = created.json().id as string;
+      const replies = [
+        created,
+        await f.call('GET', '/api/source-control-connections'),
+        await f.call('POST', `/api/source-control-connections/${id}/check`),
+        await f.call('GET', '/api/audit-entries'),
+        await f.call('GET', '/api/error-events'),
+      ];
+      for (const reply of replies) expect(reply.body).not.toContain(token);
+      expect(dumpPlaintext(f.db)).not.toContain(token);
+      // a rejected token must not leak into errors or the audit trail either
+      const rejected = await f.call('POST', '/api/source-control-connections', {
+        name: 'bad',
+        platform: 'github',
+        token: 'ghp_rejectedSecretValue99',
+      });
+      expect(rejected.statusCode).toBe(422);
+      expect(rejected.body).not.toContain('ghp_rejectedSecretValue99');
+      expect(dumpPlaintext(f.db)).not.toContain('ghp_rejectedSecretValue99');
+    } finally {
+      await f.close();
+    }
+  });
   it.todo('Claude API key is sealed and never returned or logged (US2)');
   it.todo('Codex bundle is sealed; no auth.json on the host disk (US2)');
   it.todo('git clones leave no token in .git/config or remote URLs (US5)');

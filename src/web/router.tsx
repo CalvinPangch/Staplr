@@ -9,6 +9,7 @@ import { ApiError, api } from './lib/api';
 import { AppShell, NotFound, Pending, StartError } from './routes/__root';
 import { AuditPage } from './routes/audit';
 import { HomePage } from './routes/home';
+import { SourceControlPage } from './routes/settings/source-control';
 import { SetupPage } from './routes/setup';
 import { SignInPage } from './routes/sign-in';
 
@@ -76,6 +77,11 @@ export function createAppRouter(queryClient: QueryClient) {
       getParentRoute: () => rootRoute,
       path: '/sign-in',
       component: SignInPage,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/settings/source-control',
+      component: SourceControlPage,
     }),
     createRoute({
       getParentRoute: () => rootRoute,

@@ -2,6 +2,7 @@ import {
   sqliteTable,
   text,
   integer,
+  blob,
   check,
   uniqueIndex,
 } from 'drizzle-orm/sqlite-core';
@@ -38,6 +39,30 @@ export const auditEntries = sqliteTable('audit_entry', {
   targetName: text('targetName').notNull(),
   detail: text('detail').notNull(),
 });
+export const sourceControlConnections = sqliteTable(
+  'source_control_connection',
+  {
+    id: text('id').primaryKey(),
+    name: text('name').notNull().unique(),
+    platform: text('platform', { enum: ['github', 'gitlab'] }).notNull(),
+    baseUrl: text('baseUrl').notNull(),
+    accountName: text('accountName').notNull(),
+    grantedPermissions: text('grantedPermissions').notNull().default('[]'),
+    tokenSealed: blob('tokenSealed', { mode: 'buffer' }).notNull(),
+    tokenLast4: text('tokenLast4').notNull(),
+    status: text('status', {
+      enum: ['connected', 'needs_attention'],
+    }).notNull(),
+    statusReason: text('statusReason', {
+      enum: ['invalid', 'expired', 'revoked', 'missing_permission'],
+    }),
+    missingPermissions: text('missingPermissions').notNull().default('[]'),
+    lastCheckedAt: text('lastCheckedAt'),
+    lastCheckResult: text('lastCheckResult'),
+    createdAt: text('createdAt').notNull(),
+    updatedAt: text('updatedAt').notNull(),
+  },
+);
 export const errorEvents = sqliteTable('error_event', {
   id: text('id').primaryKey(),
   at: text('at').notNull(),

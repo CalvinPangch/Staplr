@@ -7,6 +7,8 @@ export interface AuditInput {
   targetId: string;
   targetName: string;
   detail?: Record<string, unknown>;
+  /** ISO time; defaults to now. Services pass their injected clock. */
+  at?: string;
 }
 export function recordAudit(db: Database.Database, input: AuditInput) {
   const detail = input.detail ?? {};
@@ -16,7 +18,7 @@ export function recordAudit(db: Database.Database, input: AuditInput) {
     'INSERT INTO audit_entry(id,at,action,targetType,targetId,targetName,detail) VALUES(?,?,?,?,?,?,?)',
   ).run(
     randomUUID(),
-    new Date().toISOString(),
+    input.at ?? new Date().toISOString(),
     input.action,
     input.targetType,
     input.targetId,

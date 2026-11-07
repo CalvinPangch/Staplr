@@ -47,6 +47,12 @@ env.DATA_DIR = dataDir;
 env.PORT = apiPort;
 env.PUBLIC_URL ??= `http://localhost:${webPort}`;
 
+// Test mode also runs a fake GitHub/GitLab the app talks to instead of the real
+// platforms (the app only honours this override when STAPLR_TEST_MODE=1).
+const fakePort = env.FAKE_PORT ?? String(Number(apiPort) + 20);
+if (testMode)
+  env.STAPLR_TEST_GITHUB_API_URL ??= `http://127.0.0.1:${fakePort}/github`;
+
 const children = [
   spawn(
     process.execPath,
@@ -63,6 +69,15 @@ const children = [
     { stdio: 'inherit', env },
   ),
 ];
+
+if (testMode)
+  children.push(
+    spawn(
+      process.execPath,
+      ['node_modules/tsx/dist/cli.mjs', 'tests/fakes/run-platform-fake.ts'],
+      { stdio: 'inherit', env: { ...env, FAKE_PORT: fakePort } },
+    ),
+  );
 
 let stopping = false;
 function stop(code) {

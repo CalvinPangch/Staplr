@@ -16,6 +16,8 @@ const schema = z.object({
   STAPLR_ALLOW_INSECURE_HTTP: z.enum(['0', '1']).default('0'),
   DOCKER_HOST: z.string().default('unix:///var/run/docker.sock'),
   STAPLR_TEST_MODE: z.enum(['0', '1']).default('0'),
+  /** Points the GitHub adapter at a fake server. Only honoured in test mode. */
+  STAPLR_TEST_GITHUB_API_URL: z.string().url().optional(),
   SANDBOX_IDLE_MS: z.coerce.number().int().positive().default(900000),
 });
 export function parseConfig(env: Record<string, string | undefined>) {
@@ -37,6 +39,10 @@ export function parseConfig(env: Record<string, string | undefined>) {
     throw new Error('HTTPS is required for non-local PUBLIC_URL');
   if (url.username || url.password)
     throw new Error('PUBLIC_URL must not contain credentials');
+  if (value.STAPLR_TEST_GITHUB_API_URL && value.STAPLR_TEST_MODE !== '1')
+    throw new Error(
+      'STAPLR_TEST_GITHUB_API_URL is only allowed when STAPLR_TEST_MODE=1',
+    );
   return {
     masterKey: Buffer.from(value.STAPLR_MASTER_KEY, 'base64'),
     sessionSecret: value.SESSION_SECRET,
@@ -48,6 +54,7 @@ export function parseConfig(env: Record<string, string | undefined>) {
     allowInsecureHttp: value.STAPLR_ALLOW_INSECURE_HTTP === '1',
     dockerHost: value.DOCKER_HOST,
     testMode: value.STAPLR_TEST_MODE === '1',
+    githubApiUrl: value.STAPLR_TEST_GITHUB_API_URL ?? 'https://api.github.com',
     sandboxIdleMs: value.SANDBOX_IDLE_MS,
   };
 }

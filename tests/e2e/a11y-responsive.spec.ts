@@ -68,7 +68,7 @@ for (const theme of themes) {
       await useTheme(page, theme);
       await page.setViewportSize({ width: 320, height: 640 });
       await signInAsOwner(page);
-      for (const path of ['/', '/audit']) {
+      for (const path of ['/', '/audit', '/settings/source-control']) {
         await page.goto(path);
         await expect(page.locator('main')).toBeVisible();
         await axeCheck(page);

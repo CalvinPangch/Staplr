@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { sealToBlob, openBlob } from '../../src/server/lib/crypto';
 import { seal, open } from '../../src/server/lib/crypto';
 const key = Buffer.alloc(32, 7);
 describe('authenticated secret storage', () => {
@@ -36,5 +37,30 @@ describe('authenticated secret storage', () => {
     expect(() =>
       open({ ...seal(Buffer.from('a'), key), keyVersion: 2 }, key),
     ).toThrow();
+  });
+});
+
+describe('sealed blobs for database columns', () => {
+  const key = Buffer.alloc(32, 5);
+  it('round trips and never contains the plaintext', () => {
+    const secret = Buffer.from('ghp_blobSecretValue000000000000000001');
+    const blob = sealToBlob(secret, key);
+    expect(blob.toString('latin1')).not.toContain('ghp_blobSecretValue');
+    expect(openBlob(blob, key).equals(secret)).toBe(true);
+  });
+  it('rejects tampering, another key, and a malformed blob', () => {
+    const blob = sealToBlob(Buffer.from('secret'), key);
+    const envelope = JSON.parse(blob.toString('utf8')) as {
+      ciphertext: string;
+    };
+    const bytes = Buffer.from(envelope.ciphertext, 'base64');
+    bytes[0] = (bytes[0] ?? 0) ^ 0xff;
+    envelope.ciphertext = bytes.toString('base64');
+    const tampered = Buffer.from(JSON.stringify(envelope));
+    expect(() => openBlob(tampered, key)).toThrow();
+    expect(() => openBlob(blob, Buffer.alloc(32, 6))).toThrow();
+    expect(() => openBlob(Buffer.from('{}'), key)).toThrow(
+      /Invalid sealed blob/,
+    );
   });
 });

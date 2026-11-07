@@ -57,7 +57,9 @@ paths:
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/SourceControlConnectionCreate' } } } }
       responses:
         '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/SourceControlConnection' } } } }
-        '422': { description: Invalid token or missing permissions (code token_invalid | token_missing_permissions; details.missingPermissions), content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '409': { $ref: '#/components/responses/Problem' }
+        '422': { description: Invalid input, or invalid token or missing permissions (code invalid_input | token_invalid | token_missing_permissions; details.missingPermissions), content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '503': { $ref: '#/components/responses/Problem' }
   /api/source-control-connections/{id}:
     parameters: [ { $ref: '#/components/parameters/Id' } ]
     patch:
@@ -65,16 +67,22 @@ paths:
       requestBody: { required: true, content: { application/json: { schema: { type: object, properties: { name: { type: string, minLength: 1, maxLength: 80 }, token: { type: string, writeOnly: true } } } } } }
       responses:
         '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/SourceControlConnection' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
         '422': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
     delete:
       summary: Remove a connection; projects using it become Not ready
-      responses: { '204': { description: Removed } }
+      responses:
+        '204': { description: Removed }
+        '404': { $ref: '#/components/responses/Problem' }
   /api/source-control-connections/{id}/check:
     parameters: [ { $ref: '#/components/parameters/Id' } ]
     post:
       summary: Check now
       responses:
         '200': { description: Check result, content: { application/json: { schema: { $ref: '#/components/schemas/SourceControlConnection' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
   /api/source-control-connections/{id}/repositories:
     parameters:
       - { $ref: '#/components/parameters/Id' }

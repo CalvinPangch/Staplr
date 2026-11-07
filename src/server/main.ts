@@ -56,8 +56,8 @@ export async function createInstallation(
   const defaultWeb = resolve(process.cwd(), 'dist/web');
   const webRoot =
     options.webRoot ?? (existsSync(defaultWeb) ? defaultWeb : undefined);
-  const app = buildApp({ db, config, webRoot });
   const scheduler = createScheduler();
+  const app = buildApp({ db, config, webRoot, scheduler });
   return {
     app,
     db,

@@ -95,3 +95,84 @@ test.describe('audit log', () => {
     await expect(page.getByText('My Claude key')).toBeVisible();
   });
 });
+
+test.describe('source control settings', () => {
+  const path = '/settings/source-control';
+  const connection = {
+    id: 'c1',
+    name: 'fixture connection',
+    platform: 'github',
+    baseUrl: 'https://api.github.com',
+    accountName: 'octo',
+    grantedPermissions: ['read_contents', 'push', 'create_pull_request'],
+    missingPermissions: [],
+    tokenLast4: '1234',
+    status: 'connected',
+    statusReason: null,
+    lastCheckedAt: '2026-11-08T10:00:00.000Z',
+    lastCheckResult: 'Connected as octo.',
+  };
+
+  test('loading, empty, error with Retry, and success states', async ({
+    page,
+  }) => {
+    await signInAsOwner(page);
+    await page.route('**/api/source-control-connections', async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await route.fulfill({ json: [] });
+    });
+    await page.goto(path);
+    await expect(page.getByRole('status').first()).toContainText(
+      'Loading source control connections',
+    );
+    await expect(
+      page.getByText('No source control connections yet.'),
+    ).toBeVisible();
+    await page.unroute('**/api/source-control-connections');
+
+    let failing = true;
+    await page.route('**/api/source-control-connections', async (route) => {
+      if (failing)
+        await route.fulfill({
+          status: 500,
+          contentType: 'application/problem+json',
+          body: JSON.stringify(failure),
+        });
+      else await route.fulfill({ json: [connection] });
+    });
+    await page.goto(path);
+    await expect(page.getByRole('alert')).toContainText(
+      'Could not load source control connections',
+    );
+    failing = false;
+    await page.getByRole('button', { name: 'Retry' }).click();
+    await expect(page.getByText('fixture connection')).toBeVisible();
+    await expect(page.getByText('…1234')).toBeVisible();
+  });
+
+  test('a failed Check now explains the problem and the connection stays listed', async ({
+    page,
+  }) => {
+    await signInAsOwner(page);
+    await page.route('**/api/source-control-connections', (route) =>
+      route.fulfill({ json: [connection] }),
+    );
+    await page.route('**/api/source-control-connections/c1/check', (route) =>
+      route.fulfill({
+        status: 503,
+        contentType: 'application/problem+json',
+        body: JSON.stringify({
+          code: 'provider_unavailable',
+          message:
+            'Could not reach GitHub to check the token. Retry in a moment.',
+        }),
+      }),
+    );
+    await page.goto(path);
+    await page.getByRole('button', { name: 'Check now' }).click();
+    await expect(page.getByRole('alert')).toContainText(
+      'Could not reach GitHub',
+    );
+    await expect(page.getByText('fixture connection')).toBeVisible();
+  });
+});

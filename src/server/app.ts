@@ -9,6 +9,11 @@ import { registerAuth } from './modules/auth/hook.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { auditRoutes } from './modules/audit/routes.js';
 import { diagnosticsRoutes } from './modules/diagnostics/routes.js';
+import { registerSourceControlChecker } from './modules/health/checkers/source-control.js';
+import { healthRoutes } from './modules/health/routes.js';
+import { createScheduler } from './modules/health/scheduler.js';
+import { sourceControlRoutes } from './modules/source-control/routes.js';
+import { createSourceControlService } from './modules/source-control/service.js';
 
 const contentSecurityPolicy = [
   "default-src 'self'",
@@ -27,11 +32,14 @@ export function buildApp({
   clock = Date.now,
   routeInventory,
   webRoot,
+  scheduler = createScheduler(),
 }: {
   db: Database.Database;
   config: Config;
   clock?: () => number;
   routeInventory?: { method: string; url: string }[];
+  /** Hourly and on-demand health checks; checkers are registered below. */
+  scheduler?: ReturnType<typeof createScheduler>;
   /** Folder with the built web app; the app shell is served without a session. */
   webRoot?: string | undefined;
 }) {
@@ -98,6 +106,10 @@ export function buildApp({
   authRoutes(app, db, config, clock);
   auditRoutes(app, db);
   diagnosticsRoutes(app, db);
+  const sourceControl = createSourceControlService({ db, config, clock });
+  sourceControlRoutes(app, sourceControl);
+  healthRoutes(app, scheduler);
+  registerSourceControlChecker(scheduler, sourceControl);
   if (webRoot) app.register(fastifyStatic, { root: webRoot, wildcard: false });
   app.setNotFoundHandler((request, reply) => {
     const path = request.url.split('?')[0] ?? '';
