@@ -6,6 +6,8 @@ export default defineConfig({
         name,
         include: [`tests/${name}/**/*.test.ts`],
         environment: 'node',
+        // Docker tests count containers by label, so files must not overlap.
+        fileParallelism: name !== 'docker',
         testTimeout: name === 'docker' ? 60000 : 10000,
       },
     })),

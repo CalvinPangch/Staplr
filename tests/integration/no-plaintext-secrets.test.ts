@@ -155,7 +155,94 @@ describe('no plaintext secrets (owner account and session)', () => {
       await f.close();
     }
   });
-  it.todo('Claude API key is sealed and never returned or logged (US2)');
-  it.todo('Codex bundle is sealed; no auth.json on the host disk (US2)');
+  it('seals a Claude API key; it is never returned, stored in plaintext or audited', async () => {
+    const f = await platformFixture();
+    try {
+      const apiKey = secretFixtures.claudeApiKey;
+      const replacement = `${apiKey}-replacement`;
+      const models = ['claude-sonnet-5-5'];
+      f.anthropic.setKey(apiKey, { models });
+      f.anthropic.setKey(replacement, { models });
+      const created = await f.call('POST', '/api/provider-connections', {
+        provider: 'claude',
+        authType: 'api_key',
+        name: 'work',
+        apiKey,
+      });
+      expect(created.statusCode).toBe(201);
+      const id = created.json().id as string;
+      const replies = [
+        created,
+        await f.call('GET', '/api/provider-connections'),
+        await f.call('PUT', `/api/provider-connections/${id}/api-key`, {
+          apiKey: replacement,
+        }),
+        await f.call('POST', `/api/provider-connections/${id}/check`),
+        await f.call('GET', `/api/provider-connections/${id}/impact`),
+        await f.call('GET', '/api/audit-entries'),
+        await f.call('GET', '/api/error-events'),
+      ];
+      for (const reply of replies)
+        for (const secret of [apiKey, replacement])
+          expect(reply.body).not.toContain(secret);
+      const dump = dumpPlaintext(f.db);
+      expect(dump).not.toContain(apiKey);
+      expect(dump).not.toContain(replacement);
+      // a rejected key must not leak into the error or the audit trail either
+      const rejected = await f.call('POST', '/api/provider-connections', {
+        provider: 'claude',
+        authType: 'api_key',
+        name: 'bad',
+        apiKey: 'sk-ant-rejectedSecretValue-99',
+      });
+      expect(rejected.statusCode).toBe(422);
+      expect(rejected.body).not.toContain('sk-ant-rejectedSecretValue-99');
+      expect(dumpPlaintext(f.db)).not.toContain(
+        'sk-ant-rejectedSecretValue-99',
+      );
+    } finally {
+      await f.close();
+    }
+  });
+  it('seals a Codex login bundle; its token is never returned, stored in plaintext, audited or logged', async () => {
+    const { createFakeSandboxDriver, terminalFor } =
+      await import('../fakes/fake-sandbox-driver');
+    const driver = createFakeSandboxDriver();
+    const f = await platformFixture({ driver });
+    try {
+      const secret = 'fake-secret-fake-1'; // what the fake driver writes as the token
+      const started = await f.call('POST', '/api/sandbox-sessions', {
+        provider: 'codex',
+        name: 'codex',
+      });
+      const id = started.json().id as string;
+      // sign in the way the terminal does, then finish
+      await terminalFor(driver, 'fake-1');
+      const done = await f.call('POST', `/api/sandbox-sessions/${id}/complete`);
+      expect(done.statusCode).toBe(200);
+      const connectionId = done.json().resultConnectionId as string;
+      const replies = [
+        started,
+        done,
+        await f.call('GET', `/api/sandbox-sessions/${id}`),
+        await f.call('GET', '/api/provider-connections'),
+        await f.call('POST', `/api/provider-connections/${connectionId}/check`),
+        await f.call('GET', '/api/audit-entries'),
+        await f.call('GET', '/api/error-events'),
+      ];
+      for (const reply of replies) expect(reply.body).not.toContain(secret);
+      expect(dumpPlaintext(f.db)).not.toContain(secret);
+      const sealed = f.db
+        .prepare(
+          'SELECT credentialBundleSealed AS blob FROM provider_connection WHERE id=?',
+        )
+        .get(connectionId) as { blob: Buffer };
+      expect(sealed.blob.length).toBeGreaterThan(0);
+      expect(sealed.blob.toString('latin1')).not.toContain(secret);
+      expect(sealed.blob.toString('latin1')).not.toContain('auth.json');
+    } finally {
+      await f.close();
+    }
+  });
   it.todo('git clones leave no token in .git/config or remote URLs (US5)');
 });

@@ -30,6 +30,25 @@ export function fakePlatformUrl(projectName: string) {
   return `http://127.0.0.1:${(apiPorts[id] ?? 4310) + 20}`;
 }
 
+/** The fake Anthropic Models API for this project's installation. */
+export function fakeAnthropicUrl(projectName: string) {
+  const id = projectName.replace(/-first-run$/, '');
+  return `http://127.0.0.1:${(apiPorts[id] ?? 4310) + 40}`;
+}
+
+export async function setFakeAnthropicKey(
+  request: APIRequestContext,
+  projectName: string,
+  key: string,
+  profile: { models: string[]; reject?: boolean; failWith?: number },
+) {
+  const reply = await request.post(
+    `${fakeAnthropicUrl(projectName)}/__control/key`,
+    { data: { key, profile } },
+  );
+  expect(reply.ok()).toBe(true);
+}
+
 export interface FakeGithubProfile {
   login: string;
   kind: 'classic' | 'fine';

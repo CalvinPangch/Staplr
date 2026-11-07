@@ -1,3 +1,4 @@
+import { lazy } from 'react';
 import type { QueryClient } from '@tanstack/react-query';
 import {
   createRootRouteWithContext,
@@ -9,9 +10,17 @@ import { ApiError, api } from './lib/api';
 import { AppShell, NotFound, Pending, StartError } from './routes/__root';
 import { AuditPage } from './routes/audit';
 import { HomePage } from './routes/home';
+import { ProvidersPage } from './routes/settings/providers';
 import { SourceControlPage } from './routes/settings/source-control';
 import { SetupPage } from './routes/setup';
 import { SignInPage } from './routes/sign-in';
+
+// The terminal library is only needed on the sign-in page, so it loads on demand.
+const ProviderLoginPage = lazy(() =>
+  import('./routes/settings/provider-login').then((m) => ({
+    default: m.ProviderLoginPage,
+  })),
+);
 
 interface RouterContext {
   queryClient: QueryClient;
@@ -82,6 +91,16 @@ export function createAppRouter(queryClient: QueryClient) {
       getParentRoute: () => rootRoute,
       path: '/settings/source-control',
       component: SourceControlPage,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/settings/providers',
+      component: ProvidersPage,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/settings/providers/login/$sessionId',
+      component: ProviderLoginPage,
     }),
     createRoute({
       getParentRoute: () => rootRoute,

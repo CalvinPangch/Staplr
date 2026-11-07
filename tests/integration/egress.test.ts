@@ -5,6 +5,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createInstallation } from '../../src/server/main';
+import { listAnthropicModels } from '../../src/server/modules/providers/anthropic';
 import { createGithubAdapter } from '../../src/server/modules/source-control/adapters/github';
 import { createGitlabAdapter } from '../../src/server/modules/source-control/adapters/gitlab';
 
@@ -101,6 +102,27 @@ describe('outbound traffic from the Staplr process', () => {
     server.resetHandlers();
   });
 
-  it.todo('Claude key checks contact only api.anthropic.com (US2)');
+  it('Claude key checks contact only api.anthropic.com', async () => {
+    server.use(
+      http.get('https://api.anthropic.com/v1/models', () =>
+        HttpResponse.json({
+          data: [{ id: 'claude-sonnet-5-5' }],
+          has_more: false,
+          last_id: 'claude-sonnet-5-5',
+        }),
+      ),
+    );
+    attempted.length = 0;
+    const result = await listAnthropicModels(
+      'https://api.anthropic.com',
+      'sk-ant-egress',
+    );
+    expect(result).toEqual({ ok: true, modelIds: ['claude-sonnet-5-5'] });
+    expect([...new Set(attempted)]).toEqual(['api.anthropic.com']);
+    expect(
+      [...new Set(attempted)].filter((host) => !allowedHosts().has(host)),
+    ).toEqual([]);
+    server.resetHandlers();
+  });
   it.todo('repository clones contact only the connection host (US5)');
 });

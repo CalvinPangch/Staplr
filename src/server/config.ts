@@ -14,10 +14,21 @@ const schema = z.object({
   HOST: z.string().min(1).default('127.0.0.1'),
   PUBLIC_URL: z.string().default('http://localhost:3000'),
   STAPLR_ALLOW_INSECURE_HTTP: z.enum(['0', '1']).default('0'),
-  DOCKER_HOST: z.string().default('unix:///var/run/docker.sock'),
+  DOCKER_HOST: z
+    .string()
+    .default(
+      process.platform === 'win32'
+        ? 'npipe:////./pipe/docker_engine'
+        : 'unix:///var/run/docker.sock',
+    ),
   STAPLR_TEST_MODE: z.enum(['0', '1']).default('0'),
   /** Points the GitHub adapter at a fake server. Only honoured in test mode. */
   STAPLR_TEST_GITHUB_API_URL: z.string().url().optional(),
+  /** Points the Anthropic Models API client at a fake. Only honoured in test mode. */
+  STAPLR_TEST_ANTHROPIC_API_URL: z.string().url().optional(),
+  /** How the Codex CLI is driven in the sandbox. stub is for tests only. */
+  STAPLR_CODEX_PROFILE: z.enum(['real', 'stub']).default('real'),
+  STAPLR_CODEX_IMAGE: z.string().min(1).max(200).optional(),
   SANDBOX_IDLE_MS: z.coerce.number().int().positive().default(900000),
 });
 export function parseConfig(env: Record<string, string | undefined>) {
@@ -43,6 +54,14 @@ export function parseConfig(env: Record<string, string | undefined>) {
     throw new Error(
       'STAPLR_TEST_GITHUB_API_URL is only allowed when STAPLR_TEST_MODE=1',
     );
+  if (value.STAPLR_TEST_ANTHROPIC_API_URL && value.STAPLR_TEST_MODE !== '1')
+    throw new Error(
+      'STAPLR_TEST_ANTHROPIC_API_URL is only allowed when STAPLR_TEST_MODE=1',
+    );
+  if (value.STAPLR_CODEX_PROFILE === 'stub' && value.STAPLR_TEST_MODE !== '1')
+    throw new Error(
+      'STAPLR_CODEX_PROFILE=stub is only allowed when STAPLR_TEST_MODE=1',
+    );
   return {
     masterKey: Buffer.from(value.STAPLR_MASTER_KEY, 'base64'),
     sessionSecret: value.SESSION_SECRET,
@@ -55,6 +74,14 @@ export function parseConfig(env: Record<string, string | undefined>) {
     dockerHost: value.DOCKER_HOST,
     testMode: value.STAPLR_TEST_MODE === '1',
     githubApiUrl: value.STAPLR_TEST_GITHUB_API_URL ?? 'https://api.github.com',
+    anthropicApiUrl:
+      value.STAPLR_TEST_ANTHROPIC_API_URL ?? 'https://api.anthropic.com',
+    codexProfile: value.STAPLR_CODEX_PROFILE,
+    codexImage:
+      value.STAPLR_CODEX_IMAGE ??
+      (value.STAPLR_CODEX_PROFILE === 'stub'
+        ? 'staplr-sandbox-stub:test'
+        : 'staplr-codex:local'),
     sandboxIdleMs: value.SANDBOX_IDLE_MS,
   };
 }

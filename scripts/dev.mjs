@@ -50,8 +50,13 @@ env.PUBLIC_URL ??= `http://localhost:${webPort}`;
 // Test mode also runs a fake GitHub/GitLab the app talks to instead of the real
 // platforms (the app only honours this override when STAPLR_TEST_MODE=1).
 const fakePort = env.FAKE_PORT ?? String(Number(apiPort) + 20);
-if (testMode)
+const anthropicPort = env.FAKE_ANTHROPIC_PORT ?? String(Number(apiPort) + 40);
+if (testMode) {
   env.STAPLR_TEST_GITHUB_API_URL ??= `http://127.0.0.1:${fakePort}/github`;
+  env.STAPLR_TEST_ANTHROPIC_API_URL ??= `http://127.0.0.1:${anthropicPort}`;
+  // Codex sign-in runs in the stub image (npm run sandbox:build -- stub), never the real CLI.
+  env.STAPLR_CODEX_PROFILE ??= 'stub';
+}
 
 const children = [
   spawn(
@@ -75,7 +80,14 @@ if (testMode)
     spawn(
       process.execPath,
       ['node_modules/tsx/dist/cli.mjs', 'tests/fakes/run-platform-fake.ts'],
-      { stdio: 'inherit', env: { ...env, FAKE_PORT: fakePort } },
+      {
+        stdio: 'inherit',
+        env: {
+          ...env,
+          FAKE_PORT: fakePort,
+          FAKE_ANTHROPIC_PORT: anthropicPort,
+        },
+      },
     ),
   );
 

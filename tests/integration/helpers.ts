@@ -4,12 +4,27 @@ import { migrateUp } from '../../src/server/db/migrate';
 import { buildApp } from '../../src/server/app';
 import { createScheduler } from '../../src/server/modules/health/scheduler';
 import { startPlatformFake } from '../fakes/platform-fake';
+import { startAnthropicFake } from '../fakes/anthropic-fake';
+import {
+  createStartupRegistry,
+  type StartupRegistry,
+} from '../../src/server/lib/startup';
+import type { SandboxDriver } from '../../src/server/modules/sandbox/driver';
+import {
+  createImpactRegistry,
+  type ImpactRegistry,
+} from '../../src/server/modules/providers/impact';
 export const origin = 'http://localhost:3000';
 export async function fixture(
   https = false,
   routeInventory?: { method: string; url: string }[],
   webRoot?: string,
-  options: { env?: Record<string, string | undefined> } = {},
+  options: {
+    env?: Record<string, string | undefined>;
+    impactRegistry?: ImpactRegistry;
+    driver?: SandboxDriver | null;
+    startup?: StartupRegistry;
+  } = {},
 ) {
   const db = new Database(':memory:');
   migrateUp(db);
@@ -29,12 +44,16 @@ export async function fixture(
     routeInventory,
     webRoot,
     scheduler,
+    impactRegistry: options.impactRegistry ?? createImpactRegistry(),
+    sandboxDriver: options.driver ?? null,
+    startup: options.startup ?? createStartupRegistry(),
   });
   return {
     db,
     app,
     config,
     scheduler,
+    now: () => time,
     advance: (ms: number) => {
       time += ms;
     },
@@ -55,11 +74,22 @@ export async function signedIn(f: Awaited<ReturnType<typeof fixture>>) {
   return reply.cookies[0]?.value ?? '';
 }
 
-/** An installation signed in as the owner, wired to a fake GitHub/GitLab. */
-export async function platformFixture() {
+/** An installation signed in as the owner, wired to fake GitHub/GitLab and Anthropic APIs. */
+export async function platformFixture(
+  options: { driver?: SandboxDriver; startup?: StartupRegistry } = {},
+) {
   const fake = await startPlatformFake();
+  const anthropic = await startAnthropicFake();
+  const impactRegistry = createImpactRegistry();
   const f = await fixture(false, undefined, undefined, {
-    env: { STAPLR_TEST_GITHUB_API_URL: fake.githubApiUrl },
+    env: {
+      STAPLR_TEST_GITHUB_API_URL: fake.githubApiUrl,
+      STAPLR_TEST_ANTHROPIC_API_URL: anthropic.url,
+      STAPLR_CODEX_PROFILE: 'stub',
+    },
+    impactRegistry,
+    driver: options.driver ?? null,
+    ...(options.startup ? { startup: options.startup } : {}),
   });
   const cookie = await signedIn(f);
   const call = (
@@ -77,6 +107,8 @@ export async function platformFixture() {
   return {
     ...f,
     fake,
+    anthropic,
+    impactRegistry,
     cookie,
     call,
     async close() {
@@ -84,6 +116,7 @@ export async function platformFixture() {
       await f.app.close();
       f.db.close();
       await fake.close();
+      await anthropic.close();
     },
   };
 }

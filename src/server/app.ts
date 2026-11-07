@@ -9,9 +9,24 @@ import { registerAuth } from './modules/auth/hook.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { auditRoutes } from './modules/audit/routes.js';
 import { diagnosticsRoutes } from './modules/diagnostics/routes.js';
+import { registerProviderChecker } from './modules/health/checkers/provider.js';
 import { registerSourceControlChecker } from './modules/health/checkers/source-control.js';
 import { healthRoutes } from './modules/health/routes.js';
 import { createScheduler } from './modules/health/scheduler.js';
+import {
+  defaultImpactRegistry,
+  type ImpactRegistry,
+} from './modules/providers/impact.js';
+import { providerRoutes } from './modules/providers/routes.js';
+import { createProviderService } from './modules/providers/service.js';
+import websocket from '@fastify/websocket';
+import { defaultStartupRegistry, type StartupRegistry } from './lib/startup.js';
+import { createCodexExecutor } from './modules/providers/codex.js';
+import type { SandboxDriver } from './modules/sandbox/driver.js';
+import { realProfile, stubProfile } from './modules/sandbox/profiles.js';
+import { sandboxRoutes } from './modules/sandbox/routes.js';
+import { createSandboxService } from './modules/sandbox/service.js';
+import { terminalRoutes } from './modules/sandbox/terminal.js';
 import { sourceControlRoutes } from './modules/source-control/routes.js';
 import { createSourceControlService } from './modules/source-control/service.js';
 
@@ -33,13 +48,22 @@ export function buildApp({
   routeInventory,
   webRoot,
   scheduler = createScheduler(),
+  impactRegistry = defaultImpactRegistry,
+  sandboxDriver = null,
+  startup = defaultStartupRegistry,
 }: {
+  /** Docker (or a fake) for Codex sign-in sandboxes; null when Docker is unavailable. */
+  sandboxDriver?: SandboxDriver | null;
+  /** Recovery tasks run before the server listens. */
+  startup?: StartupRegistry;
   db: Database.Database;
   config: Config;
   clock?: () => number;
   routeInventory?: { method: string; url: string }[];
   /** Hourly and on-demand health checks; checkers are registered below. */
   scheduler?: ReturnType<typeof createScheduler>;
+  /** Who depends on a provider connection; agents and projects register here. */
+  impactRegistry?: ImpactRegistry;
   /** Folder with the built web app; the app shell is served without a session. */
   webRoot?: string | undefined;
 }) {
@@ -47,6 +71,7 @@ export function buildApp({
     logger: false,
     genReqId: () => randomUUID(),
     bodyLimit: 1024 * 1024,
+    forceCloseConnections: true,
   });
   if (routeInventory)
     app.addHook('onRoute', (route) => {
@@ -54,6 +79,19 @@ export function buildApp({
         routeInventory.push({ method, url: route.url });
     });
   app.register(cookie, { secret: config.sessionSecret });
+  // Registered before auth so rejected upgrades are flagged and their sockets released.
+  app.register(websocket, {
+    options: { maxPayload: 64 * 1024 },
+    // ws already answers an oversized frame with close code 1009; any other
+    // socket error ends the connection without logging terminal data.
+    errorHandler: (error, socket) => {
+      if (
+        (error as { code?: string }).code !==
+        'WS_ERR_UNSUPPORTED_MESSAGE_LENGTH'
+      )
+        socket.terminate();
+    },
+  });
   registerAuth(app, db, clock);
   app.addHook('onRequest', async (request, reply) => {
     reply.header('x-request-id', request.id);
@@ -108,8 +146,41 @@ export function buildApp({
   diagnosticsRoutes(app, db);
   const sourceControl = createSourceControlService({ db, config, clock });
   sourceControlRoutes(app, sourceControl);
+  const profile =
+    config.codexProfile === 'stub'
+      ? stubProfile(config.codexImage)
+      : realProfile(config.codexImage);
+  const providers = createProviderService({
+    db,
+    config,
+    clock,
+    impact: impactRegistry,
+    codex: sandboxDriver
+      ? createCodexExecutor(sandboxDriver, profile)
+      : undefined,
+  });
+  app.decorate('providers', providers);
+  providerRoutes(app, providers);
+  const sandbox = createSandboxService({
+    db,
+    config,
+    clock,
+    driver: sandboxDriver,
+    providers,
+    profile,
+  });
+  app.decorate('sandbox', sandbox);
+  app.register(async (scope) => {
+    sandboxRoutes(scope, sandbox);
+    terminalRoutes(scope, sandbox, config);
+  });
+  if (!startup.hasStartupTask('recover-sandbox-sessions'))
+    startup.registerStartupTask('recover-sandbox-sessions', () =>
+      sandbox.recover(),
+    );
   healthRoutes(app, scheduler);
   registerSourceControlChecker(scheduler, sourceControl);
+  registerProviderChecker(scheduler, providers);
   if (webRoot) app.register(fastifyStatic, { root: webRoot, wildcard: false });
   app.setNotFoundHandler((request, reply) => {
     const path = request.url.split('?')[0] ?? '';

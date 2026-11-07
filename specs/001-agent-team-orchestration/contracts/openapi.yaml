@@ -120,6 +120,7 @@ paths:
                 apiKey: { type: string, minLength: 1, maxLength: 4096, writeOnly: true }
       responses:
         '201': { description: Connected, content: { application/json: { schema: { $ref: '#/components/schemas/ProviderConnection' } } } }
+        '409': { $ref: '#/components/responses/Problem' }
         '422': { $ref: '#/components/responses/Problem' }
         '503': { $ref: '#/components/responses/Problem' }
     get:
@@ -131,10 +132,16 @@ paths:
     patch:
       summary: Rename
       requestBody: { required: true, content: { application/json: { schema: { type: object, required: [name], properties: { name: { type: string, minLength: 1, maxLength: 80 } } } } } }
-      responses: { '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/ProviderConnection' } } } } }
+      responses:
+        '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/ProviderConnection' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
     delete:
       summary: Disconnect and delete the stored login
-      responses: { '204': { description: Disconnected } }
+      responses:
+        '204': { description: Disconnected }
+        '404': { $ref: '#/components/responses/Problem' }
   /api/provider-connections/{id}/api-key:
     parameters: [ { $ref: '#/components/parameters/Id' } ]
     put:
@@ -172,11 +179,14 @@ paths:
       summary: Agents and projects affected by disconnecting (shown in the warning)
       responses:
         '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Impact' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
   /api/provider-connections/{id}/check:
     parameters: [ { $ref: '#/components/parameters/Id' } ]
     post:
       summary: Check authentication and assigned model access (research R6)
-      responses: { '200': { description: Result, content: { application/json: { schema: { $ref: '#/components/schemas/ProviderConnection' } } } } }
+      responses:
+        '200': { description: Result, content: { application/json: { schema: { $ref: '#/components/schemas/ProviderConnection' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
   /api/sandbox-sessions:
     post:
       summary: Start a Codex sandbox login session (see sandbox-terminal.md)
@@ -199,23 +209,31 @@ paths:
                 reloginOf: { type: string, description: Existing provider connection to re-login }
       responses:
         '201': { description: Started, content: { application/json: { schema: { $ref: '#/components/schemas/SandboxSession' } } } }
+        '404': { description: reloginOf does not exist, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '409': { description: Name already in use for Codex, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
         '422': { $ref: '#/components/responses/Problem' }
         '503': { description: Docker unavailable, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
   /api/sandbox-sessions/{id}:
     parameters: [ { $ref: '#/components/parameters/Id' } ]
     get:
       summary: Session status
-      responses: { '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/SandboxSession' } } } } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/SandboxSession' } } } }
+        '404': { description: Unknown session, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
     delete:
-      summary: Cancel; destroys the container, saves nothing
-      responses: { '204': { description: Cancelled } }
+      summary: Cancel; destroys the container, saves nothing (cancelling an ended session is harmless)
+      responses:
+        '204': { description: Cancelled }
+        '404': { description: Unknown session, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
   /api/sandbox-sessions/{id}/complete:
     parameters: [ { $ref: '#/components/parameters/Id' } ]
     post:
       summary: User says login is finished; Staplr verifies credentials exist, saves the bundle, destroys the container
       responses:
         '200': { description: Succeeded, content: { application/json: { schema: { $ref: '#/components/schemas/SandboxSession' } } } }
-        '409': { description: Credentials not found yet (code login_not_complete); session stays open, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '404': { description: Unknown session, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '409': { description: Credentials not found yet (code login_not_complete, session stays open) or the session already ended (code conflict), content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '503': { description: Docker unavailable, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
 
   # ---------- Health (FR-013, FR-014) ----------
   /api/health/check-all:

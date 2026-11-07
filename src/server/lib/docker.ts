@@ -101,6 +101,85 @@ export async function execStream(
   stdout.on('error', (error) => stream.destroy(error));
   return stream;
 }
+export interface ExecResult {
+  exitCode: number;
+  stdout: Buffer;
+  stderr: Buffer;
+  timedOut: boolean;
+}
+
+/**
+ * Runs a command in a container without a TTY and returns its exit code and
+ * (size-capped) output. Output stays in memory and is never logged: it may
+ * contain credentials.
+ */
+export async function execCollect(
+  container: Docker.Container,
+  command: string[],
+  options: { stdin?: Buffer; timeoutMs?: number; maxBytes?: number } = {},
+): Promise<ExecResult> {
+  const hasInput = options.stdin !== undefined;
+  const exec = await container.exec({
+    Cmd: command,
+    AttachStdout: true,
+    AttachStderr: true,
+    AttachStdin: hasInput,
+    Tty: false,
+    User: '1000:1000',
+  });
+  const socket = await exec.start({
+    hijack: true,
+    stdin: hasInput,
+    Detach: false,
+  });
+  const max = options.maxBytes ?? 1_048_576;
+  const out: Buffer[] = [];
+  const err: Buffer[] = [];
+  const collect = (target: Buffer[]) => {
+    let size = 0;
+    const sink = new PassThrough();
+    sink.on('data', (chunk: Buffer) => {
+      size += chunk.length;
+      if (size <= max) target.push(chunk);
+    });
+    return sink;
+  };
+  const modem = container.modem as {
+    demuxStream(
+      source: NodeJS.ReadableStream,
+      out: NodeJS.WritableStream,
+      err: NodeJS.WritableStream,
+    ): void;
+  };
+  modem.demuxStream(socket, collect(out), collect(err));
+  if (hasInput) socket.end(options.stdin);
+  const timedOut = await new Promise<boolean>((resolve) => {
+    const timer = setTimeout(() => {
+      socket.destroy();
+      resolve(true);
+    }, options.timeoutMs ?? 60_000);
+    const done = () => {
+      clearTimeout(timer);
+      resolve(false);
+    };
+    socket.on('end', done);
+    socket.on('close', done);
+    socket.on('error', done);
+  });
+  // The output stream can end a moment before the daemon records the exit code.
+  let info = await exec.inspect();
+  for (let attempt = 0; info.Running && !timedOut && attempt < 50; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    info = await exec.inspect();
+  }
+  return {
+    exitCode: info.Running ? -1 : (info.ExitCode ?? -1),
+    stdout: Buffer.concat(out),
+    stderr: Buffer.concat(err),
+    timedOut,
+  };
+}
+
 export async function removeQuietly(container: Docker.Container) {
   try {
     await container.remove({ force: true });

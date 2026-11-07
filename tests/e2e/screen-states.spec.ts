@@ -176,3 +176,78 @@ test.describe('source control settings', () => {
     await expect(page.getByText('fixture connection')).toBeVisible();
   });
 });
+
+test.describe('provider settings', () => {
+  const path = '/settings/providers';
+  const connection = {
+    id: 'p1',
+    provider: 'claude',
+    authType: 'api_key',
+    credentialRevision: 1,
+    name: 'fixture claude',
+    status: 'connected',
+    credentialExpiresAt: null,
+    lastCheckedAt: '2026-11-08T10:00:00.000Z',
+    lastCheckResult: 'API key verified.',
+  };
+
+  test('loading, empty, error with Retry, and success states', async ({
+    page,
+  }) => {
+    await signInAsOwner(page);
+    await page.route('**/api/provider-connections', async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await route.fulfill({ json: [] });
+    });
+    await page.goto(path);
+    await expect(page.getByRole('status').first()).toContainText(
+      'Loading provider connections',
+    );
+    await expect(page.getByText('No provider connections yet.')).toBeVisible();
+    await page.unroute('**/api/provider-connections');
+
+    let failing = true;
+    await page.route('**/api/provider-connections', async (route) => {
+      if (failing)
+        await route.fulfill({
+          status: 500,
+          contentType: 'application/problem+json',
+          body: JSON.stringify(failure),
+        });
+      else await route.fulfill({ json: [connection] });
+    });
+    await page.goto(path);
+    await expect(page.getByRole('alert')).toContainText(
+      'Could not load provider connections',
+    );
+    failing = false;
+    await page.getByRole('button', { name: 'Retry' }).click();
+    await expect(page.getByText('fixture claude')).toBeVisible();
+  });
+
+  test('a failed Check now explains the problem and the connection stays listed', async ({
+    page,
+  }) => {
+    await signInAsOwner(page);
+    await page.route('**/api/provider-connections', (route) =>
+      route.fulfill({ json: [connection] }),
+    );
+    await page.route('**/api/provider-connections/p1/check', (route) =>
+      route.fulfill({
+        status: 503,
+        contentType: 'application/problem+json',
+        body: JSON.stringify({
+          code: 'provider_unavailable',
+          message:
+            'Could not reach Anthropic to check the key. Retry in a moment.',
+        }),
+      }),
+    );
+    await page.goto(path);
+    await page.getByRole('button', { name: 'Check now' }).click();
+    await expect(page.getByRole('alert')).toContainText(
+      'Could not reach Anthropic',
+    );
+    await expect(page.getByText('fixture claude')).toBeVisible();
+  });
+});

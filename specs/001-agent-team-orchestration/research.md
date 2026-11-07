@@ -223,6 +223,7 @@ defines catalog updates; a catalog entry alone is not a selectable entitlement.
 | vitest, @playwright/test, @axe-core/playwright, msw | Tests | Required by Constitution I and III | vitest 5.1.0 (2026-11-02); playwright 1.65.0 (2026-11-05); axe-core/playwright 4.14.0 (2026-10-15); msw 3.0.4 (2026-11-06) |
 | @dnd-kit/core, @dnd-kit/sortable | Kanban drag and drop with built-in keyboard sensor and screen-reader announcements (R16) | Native HTML5 drag and drop has no keyboard support and doesn't work on touch screens; building an accessible version is a lot of work | core 6.3.1 and sortable 10.0.0, both released 2024-12 (23 months ago): **written exception**, see below |
 | ajv, yaml (dev only) | Contract tests validate API responses against `contracts/openapi.yaml` | Hand-checking response shapes would drift from the contract | ajv 8.20.0 (2026-04-24); yaml 2.9.1 (2026-09-11) |
+| ws, @types/ws (dev only) | The sandbox terminal tests need a WebSocket client that can set the `Cookie` and `Origin` headers; `@fastify/websocket` already depends on `ws`, so this adds no new code to the install | Node's built-in `WebSocket` cannot set those headers | ws 8.22.1 (2026-10-31); @types/ws 8.18.2 (2026-09-29) |
 
 **Maintenance rule** (Constitution IV): every dependency needs a release in the last 24 months and
 no deprecation notice, and `npm audit --audit-level=high` must be clean (T001, CI T009). A package

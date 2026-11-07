@@ -8,7 +8,8 @@ import { createDatabase } from './db/client.js';
 import { migrateUp } from './db/migrate.js';
 import { cleanupOrphans, createDockerClient } from './lib/docker.js';
 import { createLogger } from './lib/logger.js';
-import { defaultStartupRegistry, type StartupRegistry } from './lib/startup.js';
+import { createStartupRegistry, type StartupRegistry } from './lib/startup.js';
+import { createDockerDriver } from './modules/sandbox/driver.js';
 import { createScheduler } from './modules/health/scheduler.js';
 
 const cleanupTask = 'cleanup-sandbox-containers';
@@ -18,7 +19,7 @@ export interface InstallationOptions {
   webRoot?: string;
   /** Docker client, or null to run without Docker (tests, tooling). */
   docker?: Docker | null;
-  /** Registry of startup recovery tasks. Defaults to the shared one. */
+  /** Registry of startup recovery tasks. Defaults to a fresh one. */
   startup?: StartupRegistry;
 }
 
@@ -39,7 +40,7 @@ export async function createInstallation(
   const { raw: db } = createDatabase(join(config.dataDir, 'staplr.db'));
   migrateUp(db);
 
-  const startup = options.startup ?? defaultStartupRegistry;
+  const startup = options.startup ?? createStartupRegistry();
   const docker =
     options.docker === undefined
       ? createDockerClient(config.dockerHost)
@@ -48,16 +49,30 @@ export async function createInstallation(
     startup.registerStartupTask(cleanupTask, async () => {
       await cleanupOrphans(docker, 'staplr.sandbox');
     });
-  const startupResults = await startup.runStartupTasks();
-  for (const result of startupResults)
-    if (!result.ok)
-      logger.warn({ task: result.name }, 'A startup recovery task failed');
 
   const defaultWeb = resolve(process.cwd(), 'dist/web');
   const webRoot =
     options.webRoot ?? (existsSync(defaultWeb) ? defaultWeb : undefined);
   const scheduler = createScheduler();
-  const app = buildApp({ db, config, webRoot, scheduler });
+  // The app registers its own recovery tasks, so it is built before they run.
+  const profileImage = config.codexImage;
+  const app = buildApp({
+    db,
+    config,
+    webRoot,
+    scheduler,
+    startup,
+    sandboxDriver: docker ? createDockerDriver(docker, profileImage) : null,
+  });
+  const startupResults = await startup.runStartupTasks();
+  for (const result of startupResults)
+    if (!result.ok)
+      logger.warn({ task: result.name }, 'A startup recovery task failed');
+  // Login sandboxes idle for 15 minutes are destroyed; checked once a minute.
+  const sweep = setInterval(() => {
+    void app.sandbox.sweep().catch(() => undefined);
+  }, 60_000);
+  sweep.unref();
   return {
     app,
     db,
@@ -65,6 +80,7 @@ export async function createInstallation(
     scheduler,
     startupResults,
     async close() {
+      clearInterval(sweep);
       scheduler.stop();
       await app.close();
       db.close();
