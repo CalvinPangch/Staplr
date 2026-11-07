@@ -1,0 +1,475 @@
+---
+
+description: "Task list for Agent Team Orchestration Setup"
+---
+
+# Tasks: Agent Team Orchestration Setup
+
+**Input**: Design documents from `specs/001-agent-team-orchestration/`
+
+**Prerequisites**: plan.md, spec.md, research.md, data-model.md, contracts/openapi.yaml,
+contracts/sandbox-terminal.md, quickstart.md
+
+**Tests**: Included and mandatory. Constitution Principle I (Test-First, non-negotiable) requires
+every test task to be written and seen FAILING before its implementation tasks. No task combines a
+test with the code it tests.
+
+**Organization**: Tasks are grouped by user story. Paths follow the single-package layout in
+plan.md: Node.js server in `src/server/`, React app in `src/web/`, shared Zod schemas in
+`src/shared/`, tests in `tests/`.
+
+## Format: `[ID] [P?] [Story] Description`
+
+- **[P]**: Can run in parallel (different files, no dependency on unfinished tasks)
+- **[Story]**: The user story the task belongs to (US1–US7)
+
+---
+
+## Phase 1: Setup (Shared Infrastructure)
+
+**Purpose**: Project initialization and tooling
+
+- [ ] T001 Create `package.json` (single package, `"type": "module"`, `"engines": {"node": ">=22"}`) with scripts `dev`, `build`, `start`, `typecheck` (`tsc --noEmit`), `lint`, `format`, `test` (unit+integration+contract), `test:docker`, `test:e2e`, `db:generate`, `db:migrate`, `sandbox:build`, `seed:board`, and install exactly the dependencies in research.md R15, including `@dnd-kit/core` and `@dnd-kit/sortable`, plus dev-only `ajv` and `yaml`. Do NOT add `ajv-formats` or an ID library (IDs use `crypto.randomUUID()`). After installing, re-check the maintenance column in R15: `npm audit --audit-level=high` must be clean, and run `npm view <pkg> time --json` for any package whose latest release is older than 24 months and update R15 if anything changed
+- [ ] T002 [P] Create `tsconfig.json` with `"strict": true`, `"noUncheckedIndexedAccess": true`, path aliases `@shared/*` → `src/shared/*`, `@server/*` → `src/server/*`, `@web/*` → `src/web/*`
+- [ ] T003 [P] Configure ESLint (typescript-eslint strict, react-hooks, jsx-a11y) in `eslint.config.js` and Prettier in `.prettierrc.json`
+- [ ] T004 [P] Create `vite.config.ts` (React plugin, root `src/web`, build output `dist/web`, dev proxy `/api` → `http://localhost:3000` including WebSocket)
+- [ ] T005 [P] Create `vitest.config.ts` with projects `unit` (`tests/unit`), `integration` (`tests/integration`), `contract` (`tests/contract`), `docker` (`tests/docker`, only run by `test:docker`)
+- [ ] T006 [P] Create `playwright.config.ts` (webServer `npm run dev` with `STAPLR_TEST_MODE=1`, Chromium + mobile viewport 320×640) and `tests/e2e/fixtures.ts` exporting an `axeCheck(page)` helper using `@axe-core/playwright` with tags `wcag2a`, `wcag2aa`, `wcag21aa`, `wcag22aa`
+- [ ] T007 [P] Create `.env.example` (`STAPLR_MASTER_KEY`, `SESSION_SECRET`, `DATA_DIR=./data`, `PORT=3000`, `PUBLIC_URL=http://localhost:3000`, `STAPLR_ALLOW_INSECURE_HTTP=0`, `DOCKER_HOST`) and confirm `.gitignore` (created when the repository was initialised) lists `node_modules/`, `dist/`, `data/`, `.env`, `.tools/`
+- [ ] T008 [P] Create `Dockerfile` (Node 22 slim + `git`, non-root user, serves `dist/`) and `compose.yaml` with services `staplr` (named volume `staplr-data:/data`, `DOCKER_HOST=tcp://docker-proxy:2375`, `PUBLIC_URL` from `.env`), `docker-proxy` (`tecnativa/docker-socket-proxy`, env `CONTAINERS=1 EXEC=1 IMAGES=1 NETWORKS=1 POST=1`, raw socket mounted read-only into the proxy only; T017 is the authority, so add `ALLOW_START=1`, `ALLOW_STOP=1` or `ALLOW_RESTARTS=1` only if it shows they are needed), and an optional `caddy` service under compose profile `https` (`tls internal`, proxies to `staplr:3000`) per research R10 and R11
+- [ ] T009 [P] Create `.github/workflows/ci.yml` running `npm ci`, `typecheck`, `lint`, `test`, `npm audit --audit-level=high`, and `test:e2e`
+
+---
+
+## Phase 2: Foundational (Blocking Prerequisites)
+
+**Purpose**: Encryption, configuration, database, authentication, logging, error capture,
+Docker/git wrappers, health scheduler, catalog, audit, and UI shell. Every story depends on these.
+
+**⚠️ CRITICAL**: No user story work starts until this phase is complete.
+
+### Tests (write first, must fail)
+
+- [ ] T010 [P] Unit tests for AES-256-GCM seal/open in `tests/unit/crypto.test.ts`: round-trip; a fresh 12-byte nonce per call; tampered ciphertext or authTag throws; envelope contains `{keyVersion, nonce, ciphertext, authTag}`; wrong key fails
+- [ ] T011 [P] Unit tests for config parsing in `tests/unit/config.test.ts`: startup fails with a clear message when `STAPLR_MASTER_KEY` is missing or does not base64-decode to exactly 32 bytes; `PUBLIC_URL` must be `https://…`, `http://localhost…` or `http://127.0.0.1…`, and any other `http://` URL fails startup with a message that HTTPS is required unless `STAPLR_ALLOW_INSECURE_HTTP=1`; the derived `cookieSecure` is true if and only if `PUBLIC_URL` starts with `https://`
+- [ ] T012 [P] Unit tests for log redaction in `tests/unit/logger.test.ts`: values under `token`, `password`, `credential*`, `cookie`, `authorization`, `headers.cookie`, `headers.authorization` are replaced with `[REDACTED]`
+- [ ] T013 [P] Integration tests for auth in `tests/integration/auth.test.ts`: `POST /api/setup` creates the user once and then returns 409; username "3–64 chars", password min 12; sign-in sets the `staplr_session` cookie with `HttpOnly` and `SameSite=Strict`, and with `Secure` if and only if `PUBLIC_URL` is https (checked with an https URL and with `http://localhost`); wrong password returns 401; session idle timeout 12 h and absolute 7 d (fake clock); state-changing request with a foreign `Origin` returns 403; the session id is stored only as a SHA-256 hash
+- [ ] T014 [P] Contract test harness in `tests/contract/harness.ts` that loads `specs/001-agent-team-orchestration/contracts/openapi.yaml` (via `yaml`) and validates a Fastify `inject` response (status + body) against the declared schema with `ajv`, registering the formats `date-time`, `date` and `uri` itself with `ajv.addFormat` (no `ajv-formats` package)
+- [ ] T015 [P] Route-coverage contract test in `tests/contract/auth-coverage.test.ts`: enumerate every registered API route and assert 401 without a session, except `GET /api/setup/status`, `POST /api/setup`, and `POST /api/session`; also assert the static app shell (HTML and JS bundle) is served without a session and contains no user data (FR-042)
+- [ ] T016 [P] Docker hardening test in `tests/docker/docker-hardening.test.ts`: containers created via the wrapper run as non-root, `CapDrop: ["ALL"]`, `SecurityOpt: ["no-new-privileges"]`, read-only root filesystem with `/home/agent` and `/tmp` mounted as tmpfs (`rw,nosuid,size=64m`), `Memory` 512 MiB, `NanoCpus` 1 CPU, `PidsLimit` 256, no host binds, label `staplr.managed=true`
+- [ ] T017 [P] Docker proxy permission test in `tests/docker/docker-proxy-permissions.test.ts`, run against the compose `docker-proxy` service: `createHardenedContainer` can create, start, exec with a TTY, read logs, stop, kill, and remove a container and inspect a sandbox image; requests the proxy must refuse (`POST /volumes/create`, `POST /build`, `GET /swarm`) return 403 (research R11)
+- [ ] T018 [P] Git wrapper integration test in `tests/integration/git.test.ts` using a temporary local bare repository: clone with a token passes the token only through an in-memory askpass mechanism; after clone, `.git/config` and remote URLs contain no token; `fetch` + fast-forward works; a non-fast-forward is reported as `history_rewritten`
+- [ ] T019 [P] Health scheduler unit test in `tests/unit/health-scheduler.test.ts` (fake timers): registered checkers run on start, every 60 minutes, and on `runAll()`; a failing checker does not stop the others
+- [ ] T020 [P] Catalog loader unit test in `tests/unit/catalog.test.ts`: `catalog/models.json` validates against its Zod schema; each entry has `provider` in `claude|codex`, `id`, `label`, `retired` boolean, and `inputPricePerMTok`/`outputPricePerMTok` that are either decimal strings ≥ 0 or `null`; every non-null price has a `priceSource` HTTPS URL and a `pricesAsOf` ISO date (research R9); each provider has exactly one non-retired model with `probeModel: true`
+- [ ] T021 [P] Audit unit test in `tests/unit/audit.test.ts`: `recordAudit()` rejects any `detail` containing keys `token`, `password`, `credential`, `secret` (case-insensitive, nested); entries are append-only (no update/delete exported)
+- [ ] T022 [P] Diagnostics integration test in `tests/integration/diagnostics.test.ts`: an unhandled error thrown in a test-only route returns a Problem response and creates one `error_event` with `requestId`, `route`, `message`, and a stack with secrets redacted; `GET /api/error-events` returns newest first, at most 200, and 401 without a session
+- [ ] T023 [P] E2E test for first-run setup and sign-in in `tests/e2e/auth.spec.ts`: setup screen shown only while no user exists; field-level validation messages; sign in; sign out returns to sign-in; axe check on both screens
+- [ ] T024 [P] E2E test for the Audit page in `tests/e2e/audit.spec.ts`: empty state on a fresh install; after adding and removing a seeded connection the page lists `scc.added` and `scc.removed` newest first with target name and time and no secret values; axe check (FR-041)
+- [ ] T025 [P] Migration reversibility test in `tests/integration/migrations.test.ts`: on a temp SQLite file apply every migration up in order, then every `down` script in reverse order (only the migration journal remains), then up again; the schema dump after the second up equals the dump after the first up (Constitution: reversible migrations)
+
+### Implementation
+
+- [ ] T026 [P] Implement `src/server/lib/crypto.ts` (`seal(plaintext: Buffer): SealedEnvelope`, `open(env): Buffer`, AES-256-GCM via `node:crypto`, `keyVersion: 1`) to pass T010
+- [ ] T027 [P] Implement `src/server/config.ts` parsing env with Zod (`STAPLR_MASTER_KEY` 32 bytes base64, `SESSION_SECRET`, `DATA_DIR`, `PORT`, `PUBLIC_URL`, `STAPLR_ALLOW_INSECURE_HTTP`, `DOCKER_HOST`, `STAPLR_TEST_MODE`, `SANDBOX_IDLE_MS` default 900000) and the derived `cookieSecure`, to pass T011
+- [ ] T028 [P] Implement `src/server/lib/logger.ts` (pino JSON, request-id mixin, redaction list from T012) to pass T012
+- [ ] T029 [P] Create `src/shared/status.ts` with the spec's Status Vocabulary as const enums: source control `connected|needs_attention` + reasons `invalid|expired|revoked|missing_permission`; provider `connected|needs_relogin`; agent/project readiness `ready|not_ready` + reason codes `needs_relogin|no_provider_connection|model_unavailable|download_failed|repository_unavailable|base_branch_missing|source_control_needs_attention|no_project_manager|agent_not_ready`; download `downloading|downloaded|download_failed`; ticket `new|review|testing|end` with labels `New|Review|Testing|End` in that fixed order
+- [ ] T030 [P] Create `src/shared/schemas/common.ts` with the `Problem` schema (`code`, `message`, optional `details`) and an `ErrorCode` union of every code named in `contracts/openapi.yaml`
+- [ ] T031 Create the Drizzle setup: `drizzle.config.ts`, `src/server/db/client.ts` (better-sqlite3 at `${DATA_DIR}/staplr.db`, `journal_mode=WAL`, `foreign_keys=ON`), `src/server/db/ids.ts` (`newId()` = `crypto.randomUUID()`), and `src/server/db/migrate.ts` exposing `migrateUp()` and `migrateDown(toVersion)` (used by T025 and applied on startup); every migration `src/server/db/migrations/<n>_<name>.sql` has a hand-written `<n>_<name>.down.sql` because drizzle-kit does not generate them
+- [ ] T032 Add tables `user` (`username` "3–64 chars, unique", `passwordHash` Argon2id, at most one row), `session` (id stored as SHA-256 hash, `expiresAt`, `lastSeenAt`), `audit_entry`, and `error_event` (`id, at, requestId, route, message, stack (redacted)`) per data-model.md to `src/server/db/schema.ts` and generate migration `0001_core` with `0001_core.down.sql`; T025 must now pass
+- [ ] T033 Implement `src/server/app.ts`: Fastify with Zod type provider, request id per request, `@fastify/cookie`, global error handler that returns `application/problem+json` and writes unhandled errors to `error_event` through the logger's redaction, and an `Origin` check for POST/PUT/PATCH/DELETE
+- [ ] T034 Implement auth in `src/server/modules/auth/service.ts`, `src/server/modules/auth/routes.ts` (`/api/setup/status`, `/api/setup`, `/api/session` GET/POST/DELETE) and `src/server/modules/auth/hook.ts` (global `onRequest` hook enforcing a session on every API route except the allowlist in T015; session cookie `Secure` from `config.cookieSecure`) to pass T013 and T015
+- [ ] T035 [P] Implement `src/server/modules/audit/service.ts` (`recordAudit`) and `src/server/modules/audit/routes.ts` (`GET /api/audit-entries`, newest first, `before` cursor) to pass T021
+- [ ] T036 [P] Implement `src/server/modules/diagnostics/routes.ts` (`GET /api/error-events`, newest first, 200 max) to pass T022
+- [ ] T037 [P] Implement `src/server/lib/docker.ts` (dockerode client from `DOCKER_HOST`; `createHardenedContainer(opts)` applying every setting in T016 including the tmpfs mounts; `execStream(containerId, cmd, {stdin?})` that streams exec stdout and stdin without the archive API (research R5); `removeQuietly(id)`; `cleanupOrphans(label)`) to pass T016 and T017
+- [ ] T038 [P] Implement `src/server/lib/git.ts` (simple-git with an askpass script that reads the token from a per-command environment variable; `clone`, `fetchAndFastForward`, `listRemoteBranches`, `addWorktree` stub for the next feature) to pass T018
+- [ ] T039 [P] Implement `src/server/modules/health/scheduler.ts` (`registerChecker(name, fn)`, `start()`, `runAll()`, 60-minute interval) to pass T019
+- [ ] T040 [P] Create `catalog/models.json` and `src/server/modules/prices/catalog.ts` (Zod-validated loader, `listModels(provider)` excluding retired, `probeModel(provider)`) to pass T020. Data rule (research R9): list the Claude and Codex model IDs the pinned CLIs accept, mark one `probeModel` per provider; fill in a price ONLY when copied from the provider's public pricing page, recording that page as `priceSource` and the copy date as `pricesAsOf`; otherwise set both prices to `null` (shown as "Unknown"). Never estimate or recall a price from memory
+- [ ] T041 Implement `src/server/main.ts` bootstrap: load config (stopping with a clear message on an insecure non-localhost `PUBLIC_URL`, per T011), run migrations, create `src/server/lib/startup.ts` (`registerStartupTask(name, fn)`, `runStartupTasks()`) and run every registered startup task after migrations and before listening, build app, register module routes, serve `dist/web` via `@fastify/static` with SPA fallback, start the health scheduler, and call `cleanupOrphans("staplr.sandbox")`
+- [ ] T042 [P] Create design tokens in `src/web/styles/tokens.css` (color, spacing, type scale; light and dark themes; WCAG AA contrast for text and focus ring) and Tailwind 4 setup in `src/web/styles/app.css`
+- [ ] T043 [P] Create design-system components in `src/web/components/ui/`: `Button.tsx`, `TextField.tsx`, `TextArea.tsx` (with character counter), `Select.tsx`, `Combobox.tsx`, `Dialog.tsx`, `ConfirmDialog.tsx`, `DropdownMenu.tsx`, `StatusBadge.tsx` (renders every status in `src/shared/status.ts` with text, not color alone), `DataState.tsx` (loading/empty/error with a Retry action, used by every screen), `Toast.tsx`, `LiveRegion.tsx` (polite ARIA announcements), all built on Radix primitives with visible focus
+- [ ] T044 Create the web shell: `src/web/main.tsx` (TanStack Query client, router), `src/web/lib/api.ts` (fetch wrapper that parses Problem errors and redirects to sign-in on 401), `src/web/routes/__root.tsx` (AppShell with skip link, nav to Settings, Providers, Souls, Agents, Projects, Model Prices, Audit, Diagnostics; shows the insecure-HTTP banner when the server reports `STAPLR_ALLOW_INSECURE_HTTP=1`; responsive from 320 px)
+- [ ] T045 Create `src/web/routes/setup.tsx` and `src/web/routes/sign-in.tsx` (first-run setup shown only when `needsSetup`; validation messages tied to fields) to pass T023
+- [ ] T046 [P] Create `src/web/routes/audit.tsx` (Audit page listing entries with action, target, time; `DataState` for loading/empty/error; "Load older" using the `before` cursor) to pass T024
+
+**Checkpoint**: Foundation ready. Signing in works, every route is protected, errors are captured
+locally, migrations are reversible, and secrets tooling exists.
+
+---
+
+## Phase 3: User Story 1 - Connect a Source Control Account (Priority: P1) 🎯 MVP
+
+**Goal**: Add, validate, mask, replace, delete, and health-check GitHub/GitLab tokens.
+
+**Independent Test**: Add a valid GitHub and GitLab token → both "Connected" with account names; a
+token without push or pull-request permission is rejected naming the missing permissions; only
+`…last4` is ever shown; "Check now" on a revoked token shows "Needs attention: revoked"; "Check all
+connections" re-checks every connection.
+
+### Tests for User Story 1 (write first, must fail) ⚠️
+
+- [ ] T047 [P] [US1] Create the fake GitHub/GitLab HTTP server used by tests in `tests/fakes/platform-fake.ts` (tokens configurable as valid/limited/revoked; implements the endpoints the adapters call; the app points at it only when `STAPLR_TEST_MODE=1` sets the base URL override)
+- [ ] T048 [P] [US1] Adapter unit tests with msw in `tests/unit/source-control-adapters.test.ts`: GitHub classic token scopes from `X-OAuth-Scopes` (`repo` required); GitHub fine-grained token permission probe (contents read, contents write, pull requests write); GitLab `GET /api/v4/personal_access_tokens/self` requiring `api` scope; 401 maps to `invalid`, expired maps to `expired`
+- [ ] T049 [P] [US1] Contract tests in `tests/contract/source-control.contract.test.ts` for `GET/POST /api/source-control-connections`, `PATCH/DELETE /api/source-control-connections/{id}`, `POST .../{id}/check`, `POST /api/health/check-all` (responses match openapi.yaml and never contain a `token` field)
+- [ ] T050 [P] [US1] Integration tests in `tests/integration/source-control.test.ts`: create stores the sealed token and returns `tokenLast4`; a missing permission returns 422 `token_missing_permissions` with `details.missingPermissions` and no row stored; `name` "1–80 chars, unique"; GitLab `baseUrl` must be HTTPS; PATCH with a new token re-validates and writes audit `scc.replaced`; DELETE writes `scc.removed`; Check now on a revoked token sets `needs_attention`/`revoked` and `lastCheckedAt`; `check-all` returns 202 and updates every connection
+- [ ] T051 [P] [US1] E2E test in `tests/e2e/us1-source-control.spec.ts` against the fake server (T047): add GitHub connection, reject an insufficient token, see a masked token, Check now, "Check all connections", delete; axe check on Global Settings at desktop and 320 px
+
+### Implementation for User Story 1
+
+- [ ] T052 [US1] Add table `source_control_connection` to `src/server/db/schema.ts` with fields per data-model.md (`name` "1–80 chars, unique"; `platform` `github|gitlab`; `baseUrl`; `accountName`; `grantedPermissions` json; `tokenSealed` blob; `tokenLast4`; `status` `connected|needs_attention`; `statusReason`; `missingPermissions` json; `lastCheckedAt`; `lastCheckResult`) and generate migration `0002_source_control` with `0002_source_control.down.sql`
+- [ ] T053 [P] [US1] Create Zod schemas in `src/shared/schemas/source-control.ts` (`SourceControlConnectionCreate`, `SourceControlConnectionUpdate`, `SourceControlConnection` response without any token field)
+- [ ] T054 [P] [US1] Define the adapter interface `verifyToken(token) → {accountName, grantedPermissions, missingPermissions, failure?}` in `src/server/modules/source-control/adapters/types.ts`, with required permissions `read_contents`, `push`, `create_pull_request`
+- [ ] T055 [P] [US1] Implement the GitHub adapter `verifyToken` in `src/server/modules/source-control/adapters/github.ts` using `@octokit/rest` (base URL `https://api.github.com`, overridable only in test mode) to pass T048
+- [ ] T056 [P] [US1] Implement the GitLab adapter `verifyToken` in `src/server/modules/source-control/adapters/gitlab.ts` using `@gitbeaker/rest` against the connection's `baseUrl` (default `https://gitlab.com`) to pass T048
+- [ ] T057 [US1] Implement `src/server/modules/source-control/service.ts`: `create` (validate first, store nothing on failure, `seal(token)`, `tokenLast4`, audit `scc.added`), `update` (rename and/or replace token, audit `scc.replaced`), `remove` (audit `scc.removed`; projects that used the connection are cleared by the `ON DELETE SET NULL` foreign key added in T106, so no project code lives here), `check(id)`, `decryptTokenForUse(id)` (internal only)
+- [ ] T058 [US1] Implement routes in `src/server/modules/source-control/routes.ts` per openapi.yaml, plus `src/server/modules/health/routes.ts` (`POST /api/health/check-all` → 202, runs `scheduler.runAll()`), to pass T049 and T050
+- [ ] T059 [US1] Register the source control health checker in `src/server/modules/health/checkers/source-control.ts` (re-verify each token; update `status`, `statusReason`, `missingPermissions`, `lastCheckedAt`, `lastCheckResult`)
+- [ ] T060 [P] [US1] Create the Global Settings screen `src/web/routes/settings/source-control.tsx` with a page-level "Check all connections" button (FR-013), `src/web/features/source-control/ConnectionCard.tsx` (name, platform, account, `…last4`, StatusBadge with reason, last checked, Check now, Replace token, Delete with ConfirmDialog) and `AddConnectionDialog.tsx` (platform select, GitLab address field, token field with `type=password`, server errors shown next to fields, missing permissions listed); uses `DataState` for loading/empty/error; to pass T051
+
+**Checkpoint**: US1 works on its own.
+
+---
+
+## Phase 4: User Story 2 - Connect an AI Provider via Sandbox Login (Priority: P1) 🎯 MVP
+
+**Goal**: Sign in to Claude or Codex inside an isolated sandbox terminal, save the credentials as
+an encrypted bundle, reuse them, detect expiry, re-login, and disconnect.
+
+**Independent Test**: Complete a Claude sandbox login (stub image in tests) → connection
+"Connected" and the container is removed; with a simulated 30-day clock the connection keeps
+passing checks without re-login; a cancelled or idle session saves nothing; a restart during a
+login leaves the session Failed and no container behind.
+
+### Tests for User Story 2 (write first, must fail) ⚠️
+
+- [ ] T061 [P] [US2] Create the stub sandbox image `docker/sandbox/stub.Dockerfile` (includes `tar`) with a script that prints a fake login URL, waits for input `OK`, then writes fake credential files at the Claude and Codex paths (with a configurable expiry timestamp), plus a fake status command (exit 0, or exit 1 when the credential is expired)
+- [ ] T062 [P] [US2] Unit tests in `tests/unit/credential-bundle.test.ts`: a tar stream (as produced by `docker exec … tar -c`) of the given credential paths is sealed and restorable byte for byte; a missing file returns `login_not_complete`; nothing is written to the host filesystem
+- [ ] T063 [P] [US2] Docker tests in `tests/docker/sandbox-lifecycle.test.ts` using the stub image: start → `in_progress` with a running hardened container labeled `staplr.sandbox`; complete before login returns 409 `login_not_complete` and the session stays open; complete after login gives `succeeded`, a connection created, and the container removed; with the read-only root filesystem and tmpfs home, the stub credentials are read out and restored through exec-tar; cancel gives `cancelled`, nothing saved, container removed; idle beyond `SANDBOX_IDLE_MS` gives `expired`, container removed; two concurrent sessions each create their own connection; relogin (`reloginOf`) replaces the bundle on the same connection id and sets `connected`
+- [ ] T064 [P] [US2] Restart-recovery test in `tests/integration/sandbox-recovery.test.ts`: with a session row `in_progress` and a leftover container labeled `staplr.sandbox`, running the startup tasks makes the session `failed` with `failureReason = "Staplr restarted"`, removes the container, and saves nothing
+- [ ] T065 [P] [US2] WebSocket tests in `tests/integration/sandbox-terminal-ws.test.ts` per `contracts/sandbox-terminal.md`: upgrade without a session closes with `4401`; a second socket closes with `4409`; invalid message closes with an `error`; a frame over 64 KiB is rejected; `input` resets the idle deadline; terminal output never appears in captured logs
+- [ ] T066 [P] [US2] Contract tests in `tests/contract/providers.contract.test.ts` for `/api/provider-connections`, `/{id}`, `/{id}/impact`, `/{id}/check`, `/api/sandbox-sessions`, `/{id}`, `/{id}/complete`
+- [ ] T067 [P] [US2] Integration tests in `tests/integration/providers.test.ts`: `name` "1–80 chars, unique per provider"; the scheduled check (status command, no probe) on an expired stub credential sets `needs_relogin`; Check now runs the probe on the provider's `probeModel`; disconnect deletes the sealed bundle and writes audit `provider.removed`; the impact endpoint returns the lists produced by registered impact sources (empty until US4 and US5 register theirs); audit `provider.added` and `provider.relogged` are recorded
+- [ ] T068 [P] [US2] E2E test in `tests/e2e/us2-provider-connection.spec.ts` with the stub image: Connect Claude, type in the terminal, "I've finished logging in", see "Connected"; Cancel flow; axe check including the terminal page
+- [ ] T069 [P] [US2] Docker performance test in `tests/docker/perf.test.ts` (plan Performance Goals): the sandbox terminal emits its first output within 10 s of `POST /api/sandbox-sessions`; `runAll()` over 20 connections (10 stub provider + 10 fake source control) completes within 60 s
+- [ ] T070 [P] [US2] Longevity test for SC-002 in `tests/integration/provider-longevity.test.ts` (fake clock + stub status command): a credential whose expiry is beyond 30 days passes all 720 hourly scheduled checks over a simulated 30 days with no re-login; a credential that expires on day 12 is marked `needs_relogin` at the first check after expiry
+
+### Implementation for User Story 2
+
+- [ ] T071 [P] [US2] Create `docker/sandbox/claude.Dockerfile` (pinned `@anthropic-ai/claude-code` version, non-root user `agent`, HOME `/home/agent`, `tar` installed) and `docker/sandbox/codex.Dockerfile` (pinned `@openai/codex` version, `tar` installed, `~/.codex/config.toml` with `cli_auth_credentials_store = "file"`), plus `scripts/build-sandbox-images.mjs` for `npm run sandbox:build`. In `docker/sandbox/README.md`, record the pinned CLI versions, the verified credential paths and login flags, and the result of running each real image's login under the T016 limits (512 MiB, 1 CPU, read-only root, tmpfs home); if a limit is too tight, raise it in `src/server/lib/docker.ts` and T016 together (research R5 risk)
+- [ ] T072 [P] [US2] Create provider definitions in `src/server/modules/providers/definitions.ts`: per provider the image tag, login command (Claude: `claude` interactive login, fallback `claude setup-token`; Codex: `codex login --device-auth`), credential paths (Claude `~/.claude/.credentials.json`, `~/.claude.json`; Codex `~/.codex/auth.json`), status command, the minimal probe command (run on the provider's `probeModel` from `catalog/models.json`), and accessible instruction text (including the Codex note about enabling device-code sign-in)
+- [ ] T073 [US2] Add tables `provider_connection` (`provider` `claude|codex`; `name` "1–80 chars, unique per provider"; `credentialBundleSealed` blob; `credentialExpiresAt`; `status` `connected|needs_relogin`; `lastCheckedAt`; `lastCheckResult`; no account identity field) and `sandbox_login_session` (`status` `in_progress|succeeded|failed|cancelled|expired`; `reloginOf`; `containerId`; `failureReason`; `lastActivityAt`; `resultConnectionId`) to `src/server/db/schema.ts` and generate migration `0003_providers` with `0003_providers.down.sql`
+- [ ] T074 [P] [US2] Create Zod schemas in `src/shared/schemas/providers.ts` and `src/shared/schemas/sandbox.ts` (session request/response, WebSocket messages: `input` ≤ 4096 chars, `resize` cols 20–500 rows 5–200, `ping`; server messages `output`, `status`, `expiresAt`, `error`)
+- [ ] T075 [US2] Implement `src/server/modules/providers/credential-bundle.ts`: read the credential paths by running `tar -c` through `execStream` (T037) into memory and `seal` the result; `restoreInto(containerId, bundle)` runs `tar -x` the same way; read `credentialExpiresAt` when present. Never use the Docker archive API (research R5). To pass T062
+- [ ] T076 [US2] Implement `src/server/modules/sandbox/service.ts`: `start(provider, name | reloginOf)` creates a hardened container (T037) running the login command; `complete(id)` extracts the bundle or returns `login_not_complete`; `cancel(id)`; idle timer from `SANDBOX_IDLE_MS`; every terminal state removes the container in a `finally` block; terminal states are final; writes audit `provider.added`/`provider.relogged`; registers a startup task with `registerStartupTask` that marks leftover `in_progress` sessions `failed` ("Staplr restarted"); to pass T063, T064 and the sandbox half of T069
+- [ ] T077 [US2] Implement the terminal bridge `src/server/modules/sandbox/terminal.ts` with `@fastify/websocket`: session-cookie and Origin check before upgrade; docker exec TTY attach; 64 KiB frame limit and 16 KiB/s input rate limit; close codes `1000/4401/4404/4408/4409/4500`; no logging of TTY data; to pass T065
+- [ ] T078 [US2] Implement `src/server/modules/providers/service.ts` (list, rename, disconnect that deletes the bundle and writes audit `provider.removed`; agent links are cleared by the `ON DELETE SET NULL` foreign key added in T093) and `src/server/modules/providers/impact.ts` (`registerImpactSource(fn)` and `getImpact(connectionId)`, returning empty lists until US4 and US5 register theirs), plus routes in `src/server/modules/providers/routes.ts` and `src/server/modules/sandbox/routes.ts`, to pass T066 and T067
+- [ ] T079 [US2] Register the provider health checker in `src/server/modules/health/checkers/provider.ts`: scheduled runs restore the bundle into a throwaway hardened container and run the status command plus an expiry check (no model tokens used); `check(id, {probe: true})` for Check now also runs the probe command on `probeModel`; any failure sets `needs_relogin`; refreshed credential files are re-sealed after a successful check; to pass T070 and the health half of T069
+- [ ] T080 [P] [US2] Create the Provider Connections screen `src/web/routes/providers/index.tsx` (cards with StatusBadge, last checked, Check now, a page-level "Check all connections" button, Re-login, Rename, Disconnect via ConfirmDialog listing the impact; `DataState` for loading/empty/error) and the sandbox login page `src/web/routes/providers/login.$sessionId.tsx` (xterm.js with `screenReaderMode: true`, instructions panel as text, idle countdown, "I've finished logging in", Cancel, clear error states) to pass T068
+
+**Checkpoint**: US1 and US2 work independently.
+
+---
+
+## Phase 5: User Story 3 - Create Agent Roles (Souls) (Priority: P2)
+
+**Goal**: A soul library with four read-only defaults, plus custom souls created from scratch or
+copied.
+
+**Independent Test**: The four defaults exist; create a "Security Reviewer" (Project Manager not
+offered); copy Developer → editable copy with role Developer; editing a default is refused.
+
+### Tests for User Story 3 (write first, must fail) ⚠️
+
+- [ ] T081 [P] [US3] Contract tests in `tests/contract/souls.contract.test.ts` for `/api/souls`, `/api/souls/{id}`, `/api/souls/{id}/copy`
+- [ ] T082 [P] [US3] Integration tests in `tests/integration/souls.test.ts`: the four defaults are seeded with `isDefault=true`; creating from scratch with `roleType=project_manager` returns 422; PUT or DELETE on a default returns 403; copy keeps `roleType` and sets `copiedFromId`; `name` "1–80 chars, unique", `description` "≤ 500 chars", `instructions` "≤ 20,000 chars"; `roleType` cannot change on edit
+- [ ] T083 [P] [US3] E2E test in `tests/e2e/us3-souls.spec.ts`: view defaults, create custom, copy Developer and edit, axe check
+
+### Implementation for User Story 3
+
+- [ ] T084 [P] [US3] Write default soul content in `src/server/modules/souls/defaults/project-manager.md`, `business-analyst.md` (analyzes tickets, asks the user clarifying questions, writes the spec/design), `developer.md`, `qa.md`
+- [ ] T085 [US3] Add table `soul` (`name` "1–80 chars, unique"; `roleType` `project_manager|business_analyst|developer|qa|custom`; `description` "≤ 500 chars"; `instructions` "≤ 20,000 chars (markdown)"; `isDefault`; `copiedFromId`) to `src/server/db/schema.ts` and migration `0004_souls` that seeds the four defaults from T084, with `0004_souls.down.sql`
+- [ ] T086 [P] [US3] Create Zod schemas in `src/shared/schemas/souls.ts` (`SoulInput`; a from-scratch create schema whose `roleType` excludes `project_manager`)
+- [ ] T087 [US3] Implement `src/server/modules/souls/service.ts` (create, update custom only, copy, delete custom only; the in-use guard is added in T095) and routes in `src/server/modules/souls/routes.ts` to pass T081 and T082
+- [ ] T088 [P] [US3] Create the Souls screens `src/web/routes/souls/index.tsx` (library list grouped by role, default badge, Copy, Edit, Delete; `DataState` for loading/empty/error) and `src/web/routes/souls/$soulId.tsx` (editor; defaults shown read-only with a "Copy to customize" action; role picker without Project Manager for new souls) to pass T083
+
+**Checkpoint**: US3 works on its own.
+
+---
+
+## Phase 6: User Story 4 - Configure Agents with Provider and Model (Priority: P2)
+
+**Goal**: Agents that combine a soul, a provider connection, and a catalog model, with readiness.
+
+**Depends on**: US2 (provider connections) and US3 (souls) for real data. Tests may seed rows
+directly.
+
+**Independent Test**: Create a Developer agent on Claude and a QA agent on Codex; only that
+provider's models are offered; disconnecting the provider shows "Not ready: no provider
+connection" and the impact list names the agent.
+
+**Note**: Spec Story 4 scenario 6 (deleting an agent on a project team is blocked) needs project
+teams, so it is implemented in T114 and verified at the **US5 checkpoint** by T104. Until then,
+deleting an agent is always allowed.
+
+### Tests for User Story 4 (write first, must fail) ⚠️
+
+- [ ] T089 [P] [US4] Unit tests in `tests/unit/agent-readiness.test.ts`: reasons `no_provider_connection` (null connection), `needs_relogin` (connection status), `model_unavailable` (retired or unknown model); multiple reasons accumulate; otherwise `ready`
+- [ ] T090 [P] [US4] Contract tests in `tests/contract/agents.contract.test.ts` for `/api/models`, `/api/agents`, `/api/agents/{id}`
+- [ ] T091 [P] [US4] Integration tests in `tests/integration/agents.test.ts`: `name` "1–80 chars, unique"; `provider` must equal the connection's provider (422); `model` "must exist in the catalog for that provider" (422); `GET /api/models?provider=` excludes retired models; the agent's `role` equals its soul's `roleType`; deleting a soul used by agents returns 409 with `details.agents`; disconnecting a provider connection lists its agents in `GET /api/provider-connections/{id}/impact` and leaves them `no_provider_connection` (foreign key `ON DELETE SET NULL`)
+- [ ] T092 [P] [US4] E2E test in `tests/e2e/us4-agents.spec.ts`: create agents for both providers, see readiness, change model, offer to start a sandbox login when a provider has no connection, axe check
+
+### Implementation for User Story 4
+
+- [ ] T093 [US4] Add table `agent` (`name` "1–80 chars, unique"; `soulId` FK; `provider`; `providerConnectionId` FK nullable with `ON DELETE SET NULL`; `model`) to `src/server/db/schema.ts` and migration `0005_agents` with `0005_agents.down.sql`
+- [ ] T094 [P] [US4] Create Zod schemas in `src/shared/schemas/agents.ts` (`AgentInput`, `Agent` with `role`, `readiness`, `reasons`, `projects`)
+- [ ] T095 [US4] Add the in-use deletion guard to `src/server/modules/souls/service.ts` (409 `soul_in_use` with `details.agents`, FR-019)
+- [ ] T096 [US4] Implement `src/server/modules/agents/readiness.ts` (pure function from T089, computed when read, no stored column) and `src/server/modules/agents/service.ts` (create/update/delete with provider and catalog validation; edits apply from the next ticket; the PM and team guards are added in T114), plus `GET /api/models` in `src/server/modules/prices/routes.ts` and agent routes in `src/server/modules/agents/routes.ts` to pass T089, T090 and T091
+- [ ] T097 [US4] Implement `src/server/modules/agents/impact.ts`: register an impact source with `registerImpactSource` (T078) that returns the agents (id, name) using a provider connection, so the impact endpoint lists them; to pass the agent part of T091
+- [ ] T098 [P] [US4] Create the Agents screens `src/web/routes/agents/index.tsx` (table/cards: name, role, provider, model, StatusBadge with reasons, projects; `DataState` for loading/empty/error) and `src/web/routes/agents/$agentId.tsx` (form: name, soul select, provider select, connection select filtered by provider with a "Connect provider" shortcut, model select from `/api/models`) to pass T092
+
+**Checkpoint**: US4 works with US2 and US3 data.
+
+---
+
+## Phase 7: User Story 5 - Assemble a Project Team (Priority: P3)
+
+**Goal**: Pick a repository, download it, set the base branch, refresh, relink, build a team with
+exactly one Project Manager, compute readiness, and delete projects.
+
+**Depends on**: US1 (connections) and US4 (agents).
+
+**Independent Test**: Add a project from the repository picker → "Downloaded"; assign PM, BA, Dev
+and QA → "Ready"; removing the PM makes it "Not ready: no Project Manager"; a second PM is blocked;
+deleting the source control connection makes the project "Not ready"; deleting an agent on the team
+is blocked (also closes Story 4 scenario 6); a restart during a download leaves it "Download
+failed: interrupted".
+
+### Tests for User Story 5 (write first, must fail) ⚠️
+
+- [ ] T099 [P] [US5] Adapter unit tests in `tests/unit/repository-listing.test.ts` (msw): GitHub `GET /user/repos` paginated and filtered to `permissions.push=true`; GitLab `GET /projects?membership=true&min_access_level=30`; branch listing; server-side search by `q`
+- [ ] T100 [P] [US5] Unit tests in `tests/unit/project-readiness.test.ts`: every reason (`download_failed`, `repository_unavailable`, `base_branch_missing`, `source_control_needs_attention`, `no_project_manager`, `agent_not_ready:<id>`) and all-clear gives `ready`; a `null` `sourceControlConnectionId` (connection removed) gives `source_control_needs_attention` with the message "connection removed"
+- [ ] T101 [P] [US5] Contract tests in `tests/contract/projects.contract.test.ts` for all `/api/projects*` paths except board and tickets, and `/api/source-control-connections/{id}/repositories*`
+- [ ] T102 [P] [US5] Integration tests in `tests/integration/projects.test.ts` using local bare repositories via a fake adapter: create returns 202 `downloading` then `downloaded` with `baseBranch` = default branch; a clone failure gives `download_failed` and retry works; when free disk space at `DATA_DIR` is below 1 GiB the download fails with reason "insufficient disk space" before cloning; refresh fast-forwards and updates `lastUpdatedAt`; a rewritten remote returns 409 and keeps the local copy and `lastRefreshError`; base branch change to a non-existent branch returns 422; relink to another repository via `PATCH {relink}` re-downloads and clears `repository_unavailable`; deleting the source control connection (T057) clears `sourceControlConnectionId` and the project becomes Not ready: `source_control_needs_attention`; the provider impact endpoint lists the projects reached through its agents; delete removes `${DATA_DIR}/repos/<id>/` and team assignments, keeps agents, sets `deletedAt`, hides the project from the list, and keeps `usage_record` rows attributable
+- [ ] T103 [P] [US5] Restart-recovery test in `tests/integration/download-recovery.test.ts`: with a project `downloading` and a partial `base` directory, running the startup tasks makes it `download_failed` with `downloadError = "interrupted"`, removes the partial directory, and a retry clones it successfully
+- [ ] T104 [P] [US5] Integration tests in `tests/integration/teams.test.ts`: assigning a second PM returns 409 `pm_already_assigned`; `replace-project-manager` swaps in one step; `finalize-team` without a PM returns 422 `no_project_manager`; `missingRoleWarnings` lists absent BA, developer, and QA; one agent on two projects; deleting an agent on a team returns 409 `agent_in_use` with `details.projects` (Story 4 scenario 6); changing an agent's soul so that a project would have 0 or 2 PMs returns 409 `pm_rule_violation`
+- [ ] T105 [P] [US5] E2E test in `tests/e2e/us5-projects.spec.ts`: add project via connection → repository combobox search → confirm; see progress then Downloaded; build the team; PM-required block; second-PM block with replace; Refresh; change base branch; "Relink repository" after the fake repository is renamed; delete with a confirmation stating what is removed and kept; axe checks at desktop and 320 px
+
+### Implementation for User Story 5
+
+- [ ] T106 [US5] Add tables `project` (`name` "1–80 chars"; `sourceControlConnectionId` nullable FK with `ON DELETE SET NULL`; `repoFullName`; `repoRemoteId`; `baseBranch`; `downloadStatus` `downloading|downloaded|download_failed`; `downloadError`; `lastUpdatedAt`; `lastRefreshError`; `deletedAt`; no stored readiness column), `team_assignment` (composite PK `projectId`+`agentId`, `assignedAt`), and `usage_record` (append-only, fields per data-model.md including `ticketId` "no FK; the ticket may be deleted later" and `ticketTitle` "snapshot at write time"; nothing writes to it yet) to `src/server/db/schema.ts` and migration `0006_projects` with `0006_projects.down.sql`
+- [ ] T107 [P] [US5] Create Zod schemas in `src/shared/schemas/projects.ts` (`ProjectCreate`, `ProjectPatch` with `name`/`baseBranch`/`relink`, `Project`, `Team`, `Repository`)
+- [ ] T108 [US5] Add `listRepositories(q?)`, `getRepository(remoteId)`, `listBranches(remoteId)`, and `cloneUrl(remoteId)` to `src/server/modules/source-control/adapters/github.ts` and `gitlab.ts`, and the repository and branch routes to `src/server/modules/source-control/routes.ts`, to pass T099
+- [ ] T109 [US5] Implement `src/server/modules/projects/download.ts`: free-disk check (fail with "insufficient disk space" below 1 GiB free at `DATA_DIR`); background clone into `${DATA_DIR}/repos/<projectId>/base` via `src/server/lib/git.ts` with progress parsed from `git --progress` (0–100); status updates; retry; refresh (`fetchAndFastForward`; `history_rewritten` returns 409 and keeps the copy); registers a startup task with `registerStartupTask` that marks `downloading` projects `download_failed` ("interrupted") and removes their partial `base` directory; to pass T103
+- [ ] T110 [US5] Implement `src/server/modules/projects/readiness.ts` (pure function from T100; `computeProjectReadiness(projectId)` is evaluated when a project is read, with no stored readiness column) to pass T100
+- [ ] T111 [US5] Implement `src/server/modules/projects/service.ts` (create, get, list excluding deleted, rename, base branch change validated against remote branches, relink that re-downloads, delete removing the repos directory and team assignments and setting `deletedAt`; ticket removal is added in T137) and routes in `src/server/modules/projects/routes.ts` to pass T101 and T102
+- [ ] T112 [US5] Implement `src/server/modules/projects/team-service.ts` (assign, remove, replace PM, finalize, missing-role warnings, exactly-one-PM rule per FR-033) and team routes to pass T104
+- [ ] T113 [US5] Register the repository health checker in `src/server/modules/health/checkers/repository.ts` (repository still reachable and base branch exists, giving `repository_unavailable` or `base_branch_missing`)
+- [ ] T114 [US5] Add guards to `src/server/modules/agents/service.ts`: block deleting an agent with team assignments (409 `agent_in_use`); block a soul change that leaves any of its projects with 0 or 2+ PMs (409 `pm_rule_violation`), to pass T104
+- [ ] T115 [US5] Implement `src/server/modules/projects/impact.ts`: register an impact source with `registerImpactSource` (T078) that returns the projects (id, name) whose team includes an agent using a provider connection; to pass the projects part of T102
+- [ ] T116 [P] [US5] Create the Projects list `src/web/routes/projects/index.tsx` (`DataState` for loading/empty/error) and the add wizard `src/web/features/projects/AddProjectWizard.tsx` (step 1 connection select; step 2 accessible repository Combobox with server search and an empty state naming the needed permissions; step 3 confirm)
+- [ ] T117 [P] [US5] Create the project detail page `src/web/routes/projects/$projectId.tsx` (download progress bar with text percentage, Download failed + Retry, Refresh with last updated, base branch Select, "Relink repository" action opening the repository picker when the reason is `repository_unavailable`, readiness reasons with fix links, Delete ConfirmDialog stating removed vs kept items; `DataState` for loading/error)
+- [ ] T118 [P] [US5] Create `src/web/features/projects/TeamRoster.tsx` (members with role/provider/model/readiness, Add agent, Remove, Replace Project Manager dialog, missing-role warnings, Finish setup button showing the PM-required error) to pass T105
+
+**Checkpoint**: Projects reach "Ready", the hand-off point for the next feature. Story 4
+scenario 6 is now verified.
+
+---
+
+## Phase 8: User Story 6 - Review and Adjust Model Prices (Priority: P3)
+
+**Goal**: Model list prices with history, and the `estimateCost` rule the next feature uses.
+
+**Independent Test**: The price list shows prices (or "Unknown") labeled "List price used for
+estimates"; editing a price creates a new current row and closes the old one; estimates use the
+price in effect at the run time.
+
+### Tests for User Story 6 (write first, must fail) ⚠️
+
+- [ ] T119 [P] [US6] Unit tests in `tests/unit/estimate-cost.test.ts` (SC-007): exact decimal arithmetic with rounding half-up to 6 decimal places; picks the row whose `[effectiveFrom, effectiveUntil)` covers `at`; a run before and after a price change uses different prices; no price or a `null` price gives `"unknown"`, never 0; null token counts give `"unknown"`
+- [ ] T120 [P] [US6] Integration tests in `tests/integration/prices.test.ts`: startup merge creates `source=default` rows from `catalog/models.json` (copying `priceSource`/`pricesAsOf`, keeping `null` prices as null) without duplicating on restart; `POST /api/model-prices` closes the current row (`effectiveUntil` = now) and inserts a `source=user` row; at most one current row per provider+model; prices must match `^\d+(\.\d{1,6})?$` and be ≥ 0
+- [ ] T121 [P] [US6] Contract tests in `tests/contract/prices.contract.test.ts` for `GET/POST /api/model-prices`
+- [ ] T122 [P] [US6] E2E test in `tests/e2e/us6-model-prices.spec.ts`: view prices with the estimate label and source/date, edit a price, view history, "Unknown" shown with an "Enter price" action for a model without a price, axe check
+
+### Implementation for User Story 6
+
+- [ ] T123 [US6] Add table `model_price` (`provider`; `model`; `inputPricePerMTok` and `outputPricePerMTok` "decimal text \| null … ≥ 0; null = Unknown" USD per 1M tokens; `priceSource`, `pricesAsOf` nullable; `effectiveFrom`; `effectiveUntil` null = current; `source` `default|user`) to `src/server/db/schema.ts` and generate migration `0007_model_prices` with `0007_model_prices.down.sql`
+- [ ] T124 [P] [US6] Implement `src/server/modules/prices/decimal.ts` (scaled-BigInt decimal parse, multiply, and half-up rounding to 6 dp; no floating point)
+- [ ] T125 [US6] Implement `src/server/modules/prices/service.ts` (`mergeCatalogOnStartup()`, `listWithHistory()`, `setPrice()` closing the current row in one transaction) and `src/server/modules/prices/estimate.ts` (`estimateCost(provider, model, inputTokens, outputTokens, at) → {amountUsd, priceId} | "unknown"`) to pass T119 and T120
+- [ ] T126 [US6] Add `GET/POST /api/model-prices` to `src/server/modules/prices/routes.ts` and call `mergeCatalogOnStartup()` from `src/server/main.ts` to pass T121
+- [ ] T127 [P] [US6] Create the Model Prices screen `src/web/routes/model-prices.tsx` (table grouped by provider, every figure labeled "List price used for estimates" with source and date, Edit dialog, expandable history, "Unknown" with an Enter price action; `DataState` for loading/error) to pass T122
+
+**Checkpoint**: US6 works on its own.
+
+---
+
+## Phase 9: User Story 7 - Manage Tickets on the Project Kanban Board (Priority: P3)
+
+**Goal**: Every project opens on a Kanban board (New / Review / Testing / End) where the user
+creates, edits, deletes, and moves tickets by drag and drop or keyboard. No assignment yet.
+
+**Depends on**: US5 (projects exist).
+
+**Independent Test**: Add a project → its page opens on an empty four-column board; create a
+ticket (top of New); move it to Review by drag, to Testing with the keyboard, to End via "Move
+to…"; edit; delete; reload keeps everything; 200 tickets load in under 1 s.
+
+### Tests for User Story 7 (write first, must fail) ⚠️
+
+- [ ] T128 [P] [US7] Unit tests in `tests/unit/ticket-ordering.test.ts` against an in-memory SQLite: create places the ticket at `position = 0` in `new` and shifts the others +1; move within a column; move across columns; `toIndex` is clamped to `[0, count(target column)]`; delete closes the gap; after a random sequence of 200 create/move/delete operations positions stay "0-based, contiguous within (`projectId`, `status`)" and unique; `statusChangedAt` changes only when the column changes
+- [ ] T129 [P] [US7] Contract tests in `tests/contract/tickets.contract.test.ts` for `GET /api/projects/{id}/board`, `POST /api/projects/{id}/tickets`, `PATCH/DELETE /api/tickets/{id}`, `POST /api/tickets/{id}/move`
+- [ ] T130 [P] [US7] Integration tests in `tests/integration/tickets.test.ts`: the board always has exactly 4 columns in the order New, Review, Testing, End with those labels; `title` "1–200 chars, trimmed, required" (empty or 201 chars → 422); `description` "≤ 20,000 chars"; unknown fields such as `assigneeId` are rejected with 422 (FR-049); the board is available while the project is "Not ready"; deleting the project removes its tickets; a ticket of a deleted project returns 404; all routes return 401 without a session; ticket text is returned exactly as stored, never interpreted as HTML
+- [ ] T131 [P] [US7] E2E test in `tests/e2e/us7-board.spec.ts`: after the add-project wizard finishes, the page opens on the Board tab with an empty state; create two tickets; drag one to Review; with the keyboard only (Tab to card, Space, ArrowRight, Space) move the other to Testing and assert the live-region announcements; use "Move to… → End"; edit a title; delete with confirmation; reload and assert every column and order; "time in column" visible on cards; creating a ticket and moving it from New to End completes in under 30 s of test time, once with the mouse and once with only the keyboard (SC-008); axe at desktop and 320 px, with columns stacked and no horizontal scroll at 320 px
+- [ ] T132 [P] [US7] Performance test in `tests/integration/board-perf.test.ts` (SC-009): with 200 tickets, `GET /api/projects/{id}/board` responds in under 1 s and `POST /api/tickets/{id}/move` in under 500 ms (p95 over 50 runs)
+
+### Implementation for User Story 7
+
+- [ ] T133 [US7] Add table `ticket` (`projectId` FK; `title` "1–200 chars, trimmed, required"; `description` "≤ 20,000 chars, may be empty; stored as plain text"; `status` `new|review|testing|end`; `position` integer "0-based, contiguous within (`projectId`, `status`)"; `createdAt`; `updatedAt`; `statusChangedAt`; no assignee field) with a unique index on (`projectId`, `status`, `position`) to `src/server/db/schema.ts` and migration `0008_tickets` with `0008_tickets.down.sql`
+- [ ] T134 [P] [US7] Create Zod schemas in `src/shared/schemas/tickets.ts` (`TicketStatus`, strict `TicketInput` and `TicketPatch` that reject unknown keys, `MoveRequest {toStatus, toIndex ≥ 0}`, `Ticket`, `Board` with exactly four columns)
+- [ ] T135 [US7] Implement `src/server/modules/tickets/service.ts`: `getBoard(projectId)`, `create`, `update`, `move`, `remove`, each in one SQLite transaction following research R17 and data-model.md `ticket` rules, to pass T128 and T132
+- [ ] T136 [US7] Implement `src/server/modules/tickets/routes.ts` (`GET /api/projects/{id}/board`, `POST /api/projects/{id}/tickets`, `PATCH/DELETE /api/tickets/{id}`, `POST /api/tickets/{id}/move` returning the updated board) and register them in `src/server/main.ts`, to pass T129 and T130
+- [ ] T137 [US7] Extend project deletion in `src/server/modules/projects/service.ts` to delete all of the project's tickets in the same transaction (FR-030), and update the delete confirmation text in `src/web/routes/projects/$projectId.tsx` to list tickets as removed
+- [ ] T138 [P] [US7] Create `scripts/seed-board.mjs` for `npm run seed:board -- --project <id> --count <n>` (inserts n tickets spread across columns through the service; refuses to run when `NODE_ENV=production`)
+- [ ] T139 [P] [US7] Create `src/web/features/board/MoveToMenu.tsx`: a per-card `DropdownMenu` listing the other three columns plus "Move up" and "Move down" (disabled at the ends), giving a single-pointer and keyboard alternative to dragging (WCAG 2.5.7)
+- [ ] T140 [P] [US7] Create `src/web/features/board/TicketDialog.tsx` (create/edit with `TextField` title, max 200, and `TextArea` description, max 20,000, character counters and server errors next to fields) and `src/web/features/board/DeleteTicketDialog.tsx` (`ConfirmDialog` wiring); render description as escaped plain text with preserved line breaks
+- [ ] T141 [US7] Create the board components `src/web/features/board/Board.tsx`, `Column.tsx`, and `TicketCard.tsx` with `@dnd-kit/core` + `@dnd-kit/sortable` (needs T139 and T140): one sortable list per column; keyboard sensor (Space/Enter pick up and drop, arrows move, Escape cancels); screen-reader announcements via `LiveRegion` ("Picked up ticket X, column Review, position 2 of 5"); columns are labelled regions with heading and ticket count; stacked vertically below 640 px; optimistic move with rollback and error toast on failure; `DataState` for loading/empty/error; each card shows its title and relative "time in column" from `statusChangedAt`, and uses `MoveToMenu` and the edit and delete dialogs
+- [ ] T142 [US7] Make the board the project's default view: add tabs "Board" (default) and "Setup" (the existing download/team/readiness content from T117/T118) to `src/web/routes/projects/$projectId.tsx`, and navigate to the Board tab when `AddProjectWizard.tsx` finishes, to pass T131
+
+**Checkpoint**: All seven user stories work independently.
+
+---
+
+## Phase 10: Polish & Cross-Cutting Concerns
+
+- [ ] T143 [P] Security test in `tests/integration/no-plaintext-secrets.test.ts` (SC-004): run a full flow with known token and credential strings, then assert they are absent from captured logs, every non-sealed DB column, `error_event`, `audit_entry`, all API responses, `${DATA_DIR}` files outside the DB, and every `.git/config` under `${DATA_DIR}/repos`
+- [ ] T144 [P] Health-to-readiness test in `tests/integration/health-readiness.test.ts` (SC-006): revoke a token or expire a credential, run the scheduler once, and confirm the connection, agents, and projects show the correct status and reasons in the same run; with a fake clock and hourly checks, the worst-case delay from failure to visible status stays under 70 minutes
+- [ ] T145 [P] Accessibility and responsiveness sweep in `tests/e2e/a11y-responsive.spec.ts`: every screen, including the board and Diagnostics, passes axe with zero violations, has no horizontal scroll at 320 px, can be operated by keyboard alone with focus visible, and works in both light and dark themes
+- [ ] T146 [P] Screen-state sweep in `tests/e2e/screen-states.spec.ts` (Constitution III): for each screen (Global Settings, Providers, Souls, Agents, Projects, Project Board, Model Prices, Audit, Diagnostics) use Playwright route interception to force loading (delayed response), empty (empty list) and error (500 Problem body); assert a visible, specific message in each state and, for errors, a working Retry action
+- [ ] T147 [P] Performance check in `tests/integration/perf.test.ts`: repository search over 1,000 fake repositories responds in under 300 ms; list endpoints with 100 agents and 50 projects respond in under 500 ms
+- [ ] T148 [P] Outbound-traffic test in `tests/integration/egress.test.ts` (FR-043): intercept every outgoing HTTP(S) request from the Staplr process during a full integration flow and assert each host is the GitHub API, a configured GitLab `baseUrl`, or the Docker proxy; any other host fails the test
+- [ ] T149 [P] E2E test for the Diagnostics page in `tests/e2e/diagnostics.spec.ts`: empty state; after triggering a test-only failing route, the page lists the error with time, route, request ID and message, and no secret values; axe check
+- [ ] T150 Create `src/web/routes/diagnostics.tsx` (list of locally captured errors newest first, expandable redacted stack, `DataState` for loading/empty/error) to pass T149
+- [ ] T151 [P] Write `README.md`: install with Docker Compose, generating and **backing up** `STAPLR_MASTER_KEY` (losing it makes saved tokens and logins unrecoverable), backing up the `staplr-data` volume, reaching Staplr from another computer over HTTPS (`PUBLIC_URL`, the `https` profile, and why plain HTTP is refused), building sandbox images, the provider terms-of-use caveat from spec Assumptions, troubleshooting from quickstart.md
+- [ ] T152 **Manual task for a person, not the implementing agent**: run the SC-005 usability check with 5 test users following quickstart.md scenario 3 (Claude) without help; record pass/fail per user and any confusion points in `specs/001-agent-team-orchestration/checklists/usability-sc005.md` (target: at least 4 of 5 succeed first time)
+- [ ] T153 Run `npm audit --audit-level=high`, `typecheck`, `lint`, and all test suites (`test`, `test:docker`, `test:e2e`) defined in `package.json`, and fix any findings in the affected `src/` files without weakening tests
+- [ ] T154 Execute every manual scenario in `specs/001-agent-team-orchestration/quickstart.md` and record results in `specs/001-agent-team-orchestration/checklists/quickstart-results.md`
+
+---
+
+## Dependencies & Execution Order
+
+### Phase dependencies
+
+- **Setup (Phase 1)**: none.
+- **Foundational (Phase 2)**: needs Setup; BLOCKS all stories.
+- **US1 (Phase 3)** and **US2 (Phase 4)**: need only Foundational; can run in parallel.
+- **US3 (Phase 5)**: needs only Foundational.
+- **US4 (Phase 6)**: needs US2 (provider connections) and US3 (souls).
+- **US5 (Phase 7)**: needs US1 (connections and adapters) and US4 (agents).
+- **US6 (Phase 8)**: needs only Foundational (catalog from T040); can run any time after Phase 2.
+- **US7 (Phase 9)**: needs US5 (projects and the project page).
+- **Polish (Phase 10)**: after the desired stories are done.
+
+```text
+Setup → Foundational ─┬─ US1 ───────────────┐
+                      ├─ US2 ──┐            ├─ US5 ── US7 → Polish
+                      ├─ US3 ──┴─ US4 ──────┘
+                      └─ US6 (independent)
+```
+
+### Within each story
+
+1. Test tasks first; run them and confirm they FAIL (Constitution I).
+2. Schema/migration (with its `down` script) → shared Zod schemas → services → routes → health checkers → UI.
+3. The story's checkpoint is met when all of its tests pass.
+
+### How US1 and US2 stay independent of later tables
+
+Deleting a source control connection or a provider connection clears links in later tables through
+`ON DELETE SET NULL` foreign keys (T093, T106), so US1 and US2 contain no code that reads agents
+or projects. The provider impact list is a registry (T078): it returns empty lists until US4 (T097)
+and US5 (T115) register their sources.
+
+### Cross-story edits (sequential on purpose)
+
+- `src/server/modules/souls/service.ts`: T087 (US3), then T095 (US4).
+- `src/server/modules/agents/service.ts`: T096 (US4), then T114 (US5).
+- `src/server/modules/source-control/adapters/*.ts` and `routes.ts`: T055, T056, T058 (US1), then
+  T108 (US5).
+- `src/server/modules/prices/routes.ts`: T096 (US4, `GET /api/models`), then T126 (US6). If US6
+  is built first, T096 adds to the file instead of creating it.
+- `src/server/modules/projects/service.ts`: T111 (US5), then T137 (US7).
+- `src/web/routes/projects/$projectId.tsx`: T117 (US5), then T137 and T142 (US7).
+- `src/server/main.ts`: T041, then T126 and T136 register routes; T076 and T109 register startup
+  tasks through `src/server/lib/startup.ts`.
+- `src/server/modules/providers/impact.ts`: T078 creates it; T097 (agents) and T115 (projects)
+  register sources from their own modules.
+- `src/server/db/schema.ts`: every migration task touches it, so they run in story order
+  (0001 → 0008).
+
+---
+
+## Parallel Examples
+
+### Phase 2
+
+```text
+Tests together: T010–T025
+Then implementations together: T026, T027, T028, T029, T030, T035, T036, T037, T038, T039, T040, T042, T043, T046
+```
+
+### User Story 1
+
+```text
+Tests together: T047, T048, T049, T050, T051
+Then: T053, T054 in parallel → T055 + T056 in parallel → T057 → T058 → T059; T060 alongside T057–T059
+```
+
+### User Story 2
+
+```text
+Tests together: T061–T070
+Then: T071, T072, T074 in parallel → T073 → T075 → T076 → T077 → T078 → T079; T080 alongside
+```
+
+### User Story 5
+
+```text
+Tests together: T099–T105
+UI together after services: T116, T117, T118
+```
+
+### User Story 7
+
+```text
+Tests together: T128, T129, T130, T131, T132
+Then: T133 → T134 → T135 → T136 → T137; UI: T138, T139, T140 in parallel → T141 → T142
+```
+
+---
+
+## Implementation Strategy
+
+### MVP (US1 + US2, the two P1 stories)
+
+1. Phase 1 and Phase 2.
+2. US1: connect GitHub/GitLab. Validate on its own (quickstart scenarios 1–2).
+3. US2: sandbox login for Claude/Codex. Validate on its own (quickstart scenarios 3–5 and 16).
+4. **Stop and demo**: the user can securely store repository access and reusable AI logins. This
+   is the riskiest part (sandbox login and credential reuse), proven first.
+
+### Incremental delivery
+
+5. US3 souls, then US4 agents: a configured team exists.
+6. US6 prices (can come earlier; it is independent).
+7. US5 projects and teams: projects reach "Ready", the hand-off to the next feature.
+8. US7 ticket board: each project opens on its Kanban board.
+9. Polish: security, outbound traffic, screen states, accessibility, performance, Diagnostics
+   page, README, usability check, quickstart run.
+
+### Notes
+
+- `[P]` means different files and no unfinished dependencies.
+- Work on branch `001-agent-team-orchestration` (the repository was initialised during analysis
+  remediation).
+- Commit after each task or logical group (Conventional Commits).
+- Never weaken or skip a failing test to get past a gate (constitution, Development Workflow).
+- Before T071, confirm the CLI credential paths and flags on the pinned versions (research R5).
