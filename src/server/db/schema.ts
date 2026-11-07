@@ -126,3 +126,13 @@ export const souls = sqliteTable('soul', {
   createdAt: text('createdAt').notNull(),
   updatedAt: text('updatedAt').notNull(),
 });
+export const agents = sqliteTable('agent', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  soulId: text('soulId').notNull(),
+  provider: text('provider', { enum: ['claude', 'codex'] }).notNull(),
+  providerConnectionId: text('providerConnectionId'),
+  model: text('model').notNull(),
+  createdAt: text('createdAt').notNull(),
+  updatedAt: text('updatedAt').notNull(),
+});

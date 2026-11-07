@@ -18,6 +18,7 @@ const navItems = [
   { to: '/settings/source-control', label: 'Source control' },
   { to: '/settings/providers', label: 'Providers' },
   { to: '/souls', label: 'Souls' },
+  { to: '/agents', label: 'Agents' },
   { to: '/audit', label: 'Audit' },
 ] as const;
 

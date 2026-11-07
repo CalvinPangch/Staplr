@@ -318,21 +318,28 @@ paths:
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AgentInput' } } } }
       responses:
         '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Agent' } } } }
+        '409': { $ref: '#/components/responses/Problem' }
         '422': { $ref: '#/components/responses/Problem' }
   /api/agents/{id}:
     parameters: [ { $ref: '#/components/parameters/Id' } ]
-    get: { summary: Get agent, responses: { '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Agent' } } } } } }
+    get:
+      summary: Get agent
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Agent' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
     put:
       summary: Edit agent (409 code pm_rule_violation with details.projects when a soul change breaks exactly-one-PM)
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AgentInput' } } } }
       responses:
         '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/Agent' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
         '409': { $ref: '#/components/responses/Problem' }
         '422': { $ref: '#/components/responses/Problem' }
     delete:
       summary: Delete agent (409 code agent_in_use with details.projects)
       responses:
         '204': { description: Deleted }
+        '404': { $ref: '#/components/responses/Problem' }
         '409': { $ref: '#/components/responses/Problem' }
 
   # ---------- Projects + teams (FR-025..034) ----------
@@ -734,7 +741,7 @@ components:
       properties:
         id: { type: string }
         at: { type: string, format: date-time }
-        action: { type: string, enum: [scc.added, scc.replaced, scc.removed, provider.added, provider.replaced, provider.relogged, provider.removed, soul.created, soul.updated, soul.copied, soul.deleted] }
+        action: { type: string, enum: [scc.added, scc.replaced, scc.removed, provider.added, provider.replaced, provider.relogged, provider.removed, soul.created, soul.updated, soul.copied, soul.deleted, agent.created, agent.updated, agent.deleted] }
         targetType: { type: string }
         targetId: { type: string }
         targetName: { type: string }
