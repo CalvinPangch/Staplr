@@ -35,6 +35,7 @@ and never read for identity data.
 User (1) ── owns the installation
 SourceControlConnection (1) ──< Project
 ProviderConnection (1) ──< Agent
+ProviderConnection (1) ──< ModelAccess
 Soul (1) ──< Agent ;  Soul (0..1) ──< Soul (copiedFrom)
 Project (1) ──< TeamAssignment >── (1) Agent
 Project (1) ──< Ticket
@@ -96,24 +97,45 @@ the connection clears `project.sourceControlConnectionId` through the foreign ke
 | id | text PK | |
 | provider | enum `claude` \| `codex` | FR-006 |
 | name | text | 1–80 chars, unique per provider |
-| credentialBundleSealed | blob | sealed tar of the CLI credential files (R5) |
+| authType | enum `api_key` \| `codex_login` | Claude requires api_key; Codex requires codex_login |
+| apiKeySealed | blob \| null | Claude key sealed with R4; never returned |
+| credentialBundleSealed | blob \| null | Codex-only sealed CLI credential bundle |
+| credentialRevision | integer | starts at 1; increment on successful replacement/re-login |
 | credentialExpiresAt | text \| null | read from the credential file when present |
 | status | enum `connected` \| `needs_relogin` | |
 | lastCheckedAt, lastCheckResult | text | |
 | createdAt, updatedAt | text | |
 
-**Transitions**: created as `connected` by a successful sandbox login session. A failed check
-sets `needs_relogin`. A re-login (a new sandbox session with `reloginOf = id`) replaces the bundle
-in place and sets `connected`, keeping every agent link (FR-011). Disconnecting deletes the row
-and the bundle (FR-012); `agent.providerConnectionId` is cleared by the foreign key
+**Validation**: exactly one secret column is populated, matching provider/authType. Claude creation/key replacement is validated before commit; a failed replacement preserves the old key. Credentials and access results update transactionally.
+
+**Transitions**: created as `connected` by valid Claude API-key entry or Codex sandbox login. Confirmed authentication failure sets `needs_relogin`; transient errors only update check metadata. Claude key replacement or Codex re-login replaces credentials in place, increments credentialRevision, invalidates access results, and keeps agent links (FR-011). Disconnecting deletes the row
+and its encrypted credential (FR-012); `agent.providerConnectionId` is cleared by the foreign key
 (`ON DELETE SET NULL`), so the agents that used it show Not ready (`no_provider_connection`).
+
+## model_access
+
+| Field | Type | Rules |
+|---|---|---|
+| providerConnectionId | text FK | ON DELETE CASCADE; composite PK with model |
+| model | text | exact catalog model ID, no fallback alias |
+| credentialRevision | integer | result bound to current connection credential revision |
+| catalogRevision | text | result bound to bundled catalog revision |
+| availability | enum `available` \| `unavailable` \| `unknown` | unknown until verified |
+| lastVerifiedAt, lastAttemptAt | text \| null | confirmed evidence time vs most recent attempt |
+| checkError | text \| null | bounded secret-free error code; no raw provider payload |
+
+Claude evidence is the full paginated authenticated Models API result intersected with the
+catalog. Codex evidence is an exact-model probe. Authentication failure updates the connection;
+model denial updates only this pair. Transient failures preserve prior evidence for current
+revisions. Credential/catalog revision changes invalidate evidence to unknown. Disconnect
+cascades access rows. No profile, plan or account identity is collected.
 
 ## sandbox_login_session
 
 | Field | Type | Rules |
 |---|---|---|
 | id | text PK | |
-| provider | enum | |
+| provider | literal `codex` | Claude API-key entry never creates a sandbox login |
 | reloginOf | text FK → provider_connection \| null | |
 | containerId | text \| null | removed when the session ends |
 | status | enum `in_progress` \| `succeeded` \| `failed` \| `cancelled` \| `expired` | |
@@ -159,12 +181,12 @@ creates its own connection (FR-010).
 | soulId | text FK → soul | the agent's role = `soul.roleType` |
 | provider | enum | must equal `providerConnection.provider` |
 | providerConnectionId | text FK → provider_connection \| null | `ON DELETE SET NULL`: cleared when that connection is disconnected |
-| model | text | must exist in the catalog for that provider (FR-021) |
+| model | text | non-retired catalog entry with available model_access for the selected connection and current revisions (FR-021) |
 | createdAt, updatedAt | text | |
 
 **Derived readiness (FR-023)**: Not ready if `providerConnectionId` is null
 (`no_provider_connection`), the connection is `needs_relogin` (`needs_relogin`), or the model is
-retired or failed its probe (`model_unavailable`).
+retired, denied or not verified for the current credential/catalog revisions (`model_unavailable`, with a specific Check availability action for unknown evidence). Transient errors preserve current confirmed evidence and expose Retry.
 
 **Rules**:
 
@@ -268,7 +290,10 @@ this feature. The next feature adds agent-driven rules.
 
 - At most one current row (`effectiveUntil = null`) per provider and model.
 - An edit closes the current row at the moment of the edit and inserts a new `user` row.
-- Rows are never updated in any other way.
+- Catalog reconciliation preserves user overrides and history. A changed default closes the
+  previous default interval at reconciliation time and inserts a new default row only when no
+  current user override exists. Unchanged defaults are idempotent; history is never backdated.
+- Rows are never updated except to close their current interval under these rules.
 
 **`estimateCost(provider, model, inputTokens, outputTokens, at)`** (FR-038):
 
@@ -300,7 +325,7 @@ nothing writes to it yet.
 |---|---|---|
 | id | text PK | |
 | at | text | |
-| action | enum `scc.added` \| `scc.replaced` \| `scc.removed` \| `provider.added` \| `provider.relogged` \| `provider.removed` | FR-041 |
+| action | enum `scc.added` \| `scc.replaced` \| `scc.removed` \| `provider.added` \| `provider.replaced` \| `provider.relogged` \| `provider.removed` | FR-041 |
 | targetType, targetId, targetName | text | |
 | detail | json | never contains secret values (enforced by schema and test) |
 

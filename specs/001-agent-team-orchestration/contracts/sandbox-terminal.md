@@ -1,20 +1,21 @@
 # Contract: Sandbox Login Terminal (WebSocket)
 
-Supports FR-007 to FR-011 and research R5.
+Supports the Codex path of FR-007 to FR-011 and research R5. Claude API-key creation and
+replacement use authenticated HTTP endpoints in openapi.yaml; Claude cannot start a sandbox
+login session. Requests with provider=claude return 422 before creating any container.
 
 ## Lifecycle
 
-1. `POST /api/sandbox-sessions` with body `{provider, name | reloginOf}` returns
+1. `POST /api/sandbox-sessions` with body `{provider: "codex", name | reloginOf}` returns
    `SandboxSession{id, terminalUrl, instructions, expiresAt}`. The server starts a hardened
    container from the provider's pinned sandbox image, with the provider's login command as its
    entrypoint:
-   - Claude: interactive `claude` login; `claude setup-token` as a fallback.
    - Codex: `codex login --device-auth`.
 2. The browser opens a WebSocket to `terminalUrl` (`/api/sandbox-sessions/{id}/terminal`).
 3. The user follows the login in the terminal. Any URL the CLI prints is opened in the user's own
    browser, so multi-factor and CAPTCHA steps happen there.
 4. The user selects **"I've finished logging in"**, which calls `POST .../complete`. The server
-   checks that the credential files exist inside the container:
+   checks that the Codex credential files exist and the CLI confirms authentication:
    - If they don't, the response is `409 login_not_complete` and the session stays open.
    - If they do, the server seals the bundle, creates or updates the provider connection, sets
      the session to `succeeded`, closes the socket and removes the container.
@@ -76,3 +77,10 @@ All frames are JSON text and are validated against Zod schemas in `src/shared/sc
   bundle uses `tar -x` through `docker exec` the same way.
 - The UI renders the terminal with xterm.js screen-reader mode on. The provider-specific
   instructions are shown as accessible text beside the terminal (Constitution III).
+
+## Credential revision
+
+A successful Codex re-login updates the existing connection atomically, increments its
+credentialRevision, and invalidates its previous model-access results. Check exact assigned
+models before presenting agents as Ready again. Failed or cancelled re-login keeps the old
+encrypted bundle. Terminal output is never logged, persisted or added to error records.

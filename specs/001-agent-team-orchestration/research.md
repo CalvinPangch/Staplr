@@ -49,61 +49,42 @@ rest, WCAG 2.2 AA, test-first.
 - **Alternatives considered**: OS keychain (not portable to headless Linux servers); an external
   secret manager (conflicts with FR-043, which keeps everything on the installation).
 
-## R5. Sandbox login for Codex and Claude
+## R5. Provider authentication and isolated login
 
-- **Decision**: Each sandbox login session is a short-lived Docker container built from a
-  Staplr-provided image with the provider CLI preinstalled. It has no host mounts, a read-only
-  root filesystem with tmpfs mounts for the CLI's home directory and `/tmp`, runs as a non-root
-  user, and has outbound network only. The browser
-  connects to the container's terminal (Docker exec with a TTY) over a WebSocket and renders it
-  with xterm.js. The user runs the provider's own login inside it:
-  - **Claude**: interactive `claude` login (subscription OAuth). The user opens the printed URL in
-    their own browser, so MFA and CAPTCHA happen there, then pastes the code back.
-    `claude setup-token` (a one-year token) is a fallback offered in the UI.
-  - **Codex**: `codex login --device-auth` (URL plus a one-time code), with the CLI configured to
-    use file-based credential storage (`cli_auth_credentials_store = "file"`) so the result is
-    written to `~/.codex/auth.json`.
+- **Decision**: Claude uses the owner's Anthropic API key entered through an authenticated
+  password field. Validate against the official paginated Models API, seal the key with R4,
+  and never echo it. Failed create stores nothing; failed replacement keeps the old key.
+  Claude checks use node fetch against the official Models API; this feature builds no Claude
+  agent runtime. Runtime choice belongs to the next feature. Do not capture Claude.ai OAuth
+  or offer setup-token fallback. No provider CLI binary is modified.
+- **Codex**: retain short-lived hardened Docker login containers, device-code login, file
+  storage and encrypted `~/.codex/auth.json` bundles. Read/restore bundles with in-memory
+  exec-tar, not the archive API. The only credential path extracted is the Codex path.
+  Destroy login containers at terminal state; recover interrupted sessions on startup.
+- **Rationale**: R18 documents explicit API-key support for third-party Claude integrations;
+  Codex documents headless credential reuse. Both credentials remain encrypted locally.
+- **Alternatives considered**: Claude subscription file extraction (restriction identified in
+  R18); a persistent CLI-owned environment (unnecessary lifecycle complexity for this setup).
+- **Implementation verification**: verify pinned CLI flags/paths and limits using real images
+  before wiring their integration. Stub tests prove orchestration, not real-provider access.
 
-  When login succeeds, Staplr reads the CLI's credential files out of the container
-  (`~/.claude/.credentials.json` and `~/.claude.json`; `~/.codex/auth.json`) by running
-  `tar -c` inside it through `docker exec` and streaming the output into memory, encrypts them as
-  one **credential bundle** (R4), and destroys the container. Restoring runs `tar -x` the same
-  way. Docker's archive API (`docker cp`) is deliberately not used: Docker's documentation says it
-  cannot read tmpfs or mounted paths, and the home directory is a tmpfs. The sandbox images must
-  therefore include `tar`. Agent runs in the next feature restore the bundle into their own
-  container and write back any refreshed tokens afterwards.
-- **Rationale**: These are the providers' own sign-in flows, so Staplr never sees the user's
-  password. OpenAI documents copying `auth.json` to headless machines as supported. Keeping the
-  whole credential file, rather than a single printed token, keeps the CLI's own refresh tokens,
-  which supports SC-002 (30 days without re-login). The container boundary satisfies FR-008.
-- **Known risks**: third-party reports describe `setup-token` tokens failing with 401 on some
-  versions and having no automatic refresh, so it is a fallback only. Device-code login may need
-  to be enabled in the ChatGPT account's security settings, and the UI must say so. File paths
-  and flags MUST be checked against the CLI versions pinned in the sandbox images when they are
-  built. The terms-of-use dependency in the spec's Assumptions still applies.
-- **Alternatives considered**: capturing tokens by parsing terminal output (fragile, and loses the
-  refresh token); a browser-in-container approach using noVNC (heavier, and worse for
-  accessibility); asking for API keys (out of scope per the spec).
+## R6. Health checks and failure classification
 
-## R6. Connection health checks
-
-- **Decision**: An in-process scheduler runs at startup and every 60 minutes, plus on demand
-  ("Check now").
-  - **Source control**: call the platform's "current user" API and read the token's
-    scopes/permissions (GitHub `X-OAuth-Scopes` or the fine-grained permission probe; GitLab
-    `personal_access_tokens/self`).
-  - **Provider (scheduled)**: restore the bundle into a throwaway container and run the CLI's
-    auth-status command, plus check the token expiry recorded in the credential file. This uses
-    no model tokens.
-  - **Provider ("Check now")**: also runs a minimal one-turn prompt on the provider's
-    `probeModel` (the cheapest suitable model, named in `catalog/models.json`, R9) to prove the
-    login really works, because status commands have been reported to show "logged in" when calls
-    fail.
-- **Rationale**: Meets FR-013, FR-014 and SC-006 (within 70 minutes: hourly checks plus the time
-  they take to run, or immediately on "Check now")
-  without spending model usage every hour.
-- **Alternatives considered**: a cron container or job queue (extra moving parts; Constitution IV);
-  running the real-call check hourly (wasted usage).
+- **Decision**: Startup, hourly and Check now run bounded checks. Source control verifies
+  required permissions. Claude checks the key and models through paginated `GET /v1/models`;
+  Codex restores its bundle into a hardened temporary container, checks authentication and
+  verifies exact assigned models as R19 requires. Checks deduplicate connection/model pairs.
+- **Errors**: authentication rejection/confirmed expiry sets `needs_relogin`; explicit model
+  denial updates only that pair; network, rate-limit and service errors preserve the last
+  confirmed state, record a secret-free error and provide Retry. Never classify every error
+  as revoked authentication. Re-seal refreshed Codex credentials after successful checks.
+- **Timing**: enforce per-operation and full-run deadlines; the full run over 20 connections
+  must finish within 60 seconds, leaving the 70-minute status propagation target achievable.
+  Deduplicate overlapping scheduled/on-demand work. Timeout produces a retryable check error.
+- **Rationale**: Meets FR-013/014 with connection-specific model evidence. Codex exact-model
+  probes can consume subscription usage; Claude model listing does not generate tokens.
+- **Alternatives considered**: auth-status alone (cannot prove model access); a cron service
+  (extra deployable complexity); marking network outages as invalid credentials (false status).
 
 ## R7. Repository download, refresh, and working copies
 
@@ -129,13 +110,17 @@ rest, WCAG 2.2 AA, test-first.
 
 ## R9. Model catalog and prices
 
+**Revised decision**: R19 separates the shipped catalog from per-connection access. R20
+defines catalog updates; a catalog entry alone is not a selectable entitlement.
+
 - **Decision**: Staplr ships a versioned catalog file (`catalog/models.json`) listing each
   provider's selectable models, their default list prices per million input and output tokens, a
-  `retired` flag, and exactly one `probeModel: true` per provider (used by the "Check now" probe,
-  R6). On startup the catalog is merged into the `model_prices` table: shipped
+  `retired` flag, a catalog revision, and exactly one `probeModel: true` per provider (a generic
+  diagnostic only; Claude uses authenticated model discovery, R6). On startup the catalog is merged into the `model_prices` table: shipped
   prices become `source=default` rows, and user edits create new `source=user` rows that close the
-  previous row (FR-037). Agents whose model is retired, or whose model fails the "Check now"
-  probe, are marked "Not ready: model unavailable".
+  previous row (FR-037). R20 defines upgrade reconciliation. Retired models or explicit
+  connection-specific denial produce model_unavailable; transient failures preserve confirmed
+  evidence, and authentication failures request credential replacement/re-login (R19).
 - **Catalog data rule**: the catalog file records `pricesAsOf` (date) and `priceSource` (the
   provider's public pricing page URL) for each price. A price is only filled in when it was copied
   from that source on that date. Any model whose price can't be confirmed ships with
@@ -233,7 +218,7 @@ rest, WCAG 2.2 AA, test-first.
 | @node-rs/argon2 | Password hashing | `scrypt` would work, but Argon2id is the current OWASP recommendation | 2.2.2 (2026-10-06) |
 | pino | Structured logs with redaction | `console.log` has no structure or redaction | 10.4.0 (2026-10-02) |
 | react, @tanstack/react-router, @tanstack/react-query, react-hook-form | UI | Needed for an accessible single-page app | react 19.3.1 (2026-10-14); router 1.170.46 (2026-10-22); query 5.107.1 (2026-11-06); react-hook-form 7.91.0 (2026-10-23) |
-| @radix-ui/*, tailwindcss | Accessible design-system primitives | Building ARIA widgets by hand is costly and error-prone | react-dialog 1.3.1 (2026-10-12), representative of the Radix packages; tailwindcss 4.3.5 (2026-11-06) |
+| @radix-ui/*, tailwindcss, @tailwindcss/vite | Accessible design-system primitives; Tailwind 4 needs its official Vite plugin to generate utility classes | Building ARIA widgets by hand is costly and error-prone; hand-written CSS for every screen duplicates the token system | react-dialog 1.3.1 (2026-10-12), representative of the Radix packages; tailwindcss 4.3.5 (2026-11-06); @tailwindcss/vite 4.3.5 (2026-11-06, peer range includes Vite 8) |
 | @xterm/xterm | Sandbox terminal in the browser | No mature alternative exists | 6.0.0 (2025-12-22) |
 | vitest, @playwright/test, @axe-core/playwright, msw | Tests | Required by Constitution I and III | vitest 5.1.0 (2026-11-02); playwright 1.65.0 (2026-11-05); axe-core/playwright 4.14.0 (2026-10-15); msw 3.0.4 (2026-11-06) |
 | @dnd-kit/core, @dnd-kit/sortable | Kanban drag and drop with built-in keyboard sensor and screen-reader announcements (R16) | Native HTML5 drag and drop has no keyboard support and doesn't work on touch screens; building an accessible version is a lot of work | core 6.3.1 and sortable 10.0.0, both released 2024-12 (23 months ago): **written exception**, see below |
@@ -288,9 +273,114 @@ library. Ordering never depends on ID order; it uses explicit timestamps and pos
 - **Alternatives considered**: fractional or lexicographic ranks (avoid renumbering, but need
   periodic rebalancing and are harder to test, which doesn't pay off at this scale).
 
-Sources consulted for R5/R6:
-[OpenAI Codex authentication docs](https://developers.openai.com/codex/auth),
-[Codex headless login guide](https://blog.laozhang.ai/en/posts/codex-headless-login),
-[Claude Code setup-token notes](https://gist.github.com/coenjacobs/d37adc34149d8c30034cd1f20a89cce9),
-[Headless Claude Code reference](https://www.vellum.ai/skills/headless-claude-code),
-[setup-token 401 report](https://claudeissues.com/issue/84903-claude-code-oauth-token-from-claude-setup-token-returns-401-invalid-bearer-token).
+Sources for authentication: [Claude guidance](https://code.claude.com/docs/en/legal-and-compliance),
+[Claude Models API](https://platform.claude.com/docs/en/api/models/list),
+[Codex authentication](https://developers.openai.com/codex/auth).
+
+## R18. Provider authentication prerequisite resolved
+
+- **Decision (2026-11-08)**: Revise the spec explicitly to Claude owner-provided API keys and
+  Codex sandbox account login. The user requested fixing the blocker. This removes the
+  rejected Claude.ai credential collection mechanism; provider feasibility passes for this
+  design, subject to normal pinned-version integration tests.
+- **Primary evidence**: [Claude Code legal and compliance](https://code.claude.com/docs/en/legal-and-compliance)
+  recommends API keys for third-party integrations and distinguishes permitted customer API-key
+  management from restricted subscription credential collection. Keys belong to the single
+  installation owner, whose usage is billed directly by Anthropic. Staplr does not resell usage.
+  This feature does not modify or bundle Claude Code; its future runtime is a separate feature.
+  [Claude Models API](https://platform.claude.com/docs/en/api/models/list) documents available
+  models returned by the authenticated API. [Codex authentication](https://developers.openai.com/codex/auth)
+  documents device login and cached credential reuse on headless hosts.
+- **Rationale**: Resolves the earlier failed gate without assuming an exception for subscription
+  tokens. API billing is disclosed in connection setup; estimates remain estimates.
+- **Alternatives considered**: obtaining a special exception (not necessary for owner API keys);
+  continuing OAuth extraction (rejected); requiring API keys for Codex too (unnecessary change).
+- **Implementation gate**: record the source URLs/date, pinned Codex CLI version, exact-model probe
+  behavior and image-limit test results in the sandbox README before integrating real CLIs.
+  Recheck official guidance if provider behavior or authentication changes. No live credentials
+  are available during planning, and no live-provider test is claimed.
+
+## R19. Connection-specific model access (analysis I1)
+
+- **Decision**: Maintain a result per connection/model pair: `available`, `unavailable`, or
+  `unknown`, with credential revision, catalog revision, last successful verification time,
+  last attempt time and a secret-free error code. Use provider-supported capability discovery
+  if it proves access; otherwise require a minimal exact-model inference probe with no silent
+  fallback. For Claude, intersect the non-retired catalog with the complete authenticated Models API response. For Codex, verify exact-model probe behavior and error classification on the pinned CLI.
+  [Codex app-server guidance](https://developers.openai.com/siwc/token-sharing-open-source/codex-app-server)
+  distinguishes catalog listing from access verified by a successful inference turn.
+- **Selection and checks**: show unknown models disabled with Check availability; only
+  current `available` pairs can be newly assigned. Validate server-side on create/update.
+  Startup/hourly/on-demand checks verify models already used by agents, deduplicated by pair;
+  picker candidate checks happen on demand. Probes may consume subscription usage and the
+  on-demand action explains this. A probe of the default model proves nothing about another
+  selected model. The one `probeModel` remains only a generic login diagnostic.
+- **Failure classification**: confirmed expired/revoked credentials set `needs_relogin`;
+  explicit model denial sets only that pair unavailable; transient network/rate-limit/service
+  failures preserve the last confirmed state and record a retryable error. A never-verified
+  pair remains unknown. Re-login invalidates results tied to old credentials.
+- **Readiness**: retired/missing catalog entries and non-available current access results
+  produce `model_unavailable`, with precise explanation and Check availability action for
+  unknown results. Auth failure uses `needs_relogin`. Project readiness follows immediately
+  through the existing computed readiness functions. No extra top-level status is introduced.
+- **Rationale**: A provider-wide catalog is not a connection-specific entitlement; this closes
+  FR-021 and US4 scenario 5 without marking model denial as an expired login.
+- **Alternatives considered**: allowing every catalog model (cannot prove access); using one
+  successful default-model probe for all agents (does not test selected models).
+
+## R20. Catalog update lifecycle (analysis U2)
+
+- **Decision**: Versioned catalogs arrive with application releases. Validate/reconcile the
+  bundled revision at startup before serving readiness; restarting the same revision is
+  idempotent. Retired/removed identifiers become unavailable immediately; access results from
+  older revisions are invalidated for recheck. Expose revision/check time in the later model
+  contract. Do not fetch catalogs automatically from a new third-party service.
+- **Price behavior**: preserve user overrides and all historical prices. An incoming changed
+  default price closes the previous default interval and starts a new one at reconciliation
+  time only if no current user override exists; unchanged defaults create no new row. Never
+  backdate new defaults to overwrite history. Removed models retain historical price rows.
+- **Rationale**: Defines the spec's periodic maintained-model refresh using the existing
+  release channel and local startup lifecycle. Hourly access checks handle entitlement loss
+  independently of catalog releases.
+- **Alternatives considered**: remote catalog polling (adds an external dependency and trust
+  path); assuming a bundled catalog updates itself (has no implementation mechanism).
+
+## R21. Test ordering and formatting gate (analysis C1, C2)
+
+- **Decision**: T143–T148 are defined in Foundation as incremental suites; split their execution by behavior and place
+  each test's first expected failing run before its production implementation. Security and
+  egress tests precede integrations, readiness tests precede health changes, and accessibility
+  plus loading/empty/error/success checks precede each screen. Performance tests precede
+  affected picker/list/board behavior. Polish only reruns the completed suites.
+  Add `format:check` = `prettier --check .` to package scripts, CI and the final validation gate.
+- **Rationale**: Directly satisfies Constitution I, III and the automatic formatting constraint.
+  Existing generic test-first wording does not fix contradictory task placement.
+- **Alternatives considered**: first adding cross-cutting tests during Polish (too late);
+  configuring Prettier without checking it automatically (does not enforce formatting).
+
+## R22. Browser-level board performance (analysis G1)
+
+- **Decision**: Add a Playwright browser performance scenario before board implementation.
+  Use a production build, 200 persisted tickets, Chromium on the same documented 2-vCPU host,
+  a fresh page, no artificial throttling and no concurrent download/sandbox jobs. Record RAM,
+  browser/build versions and fixture. Collect 50 samples and report p95.
+- **Boundaries**: board navigation starts to all 200 cards rendered and controls usable must
+  take under 1 second. Mouse drop or keyboard move confirmation to receipt of the response
+  acknowledging the committed SQLite move must take under 500 ms, reported separately by
+  input method. Reload outside that timing interval to prove the order persists. Measure
+  the complete browser interval, not just the network request duration or optimistic render.
+- **Rationale**: SC-009 is user-visible; Fastify inject latency cannot prove rendering or
+  browser-to-server persistence timing. Retain API timing as supporting diagnostic evidence.
+- **Alternatives considered**: API-only timing (omits rendering/transport); manual network-panel
+  timing alone (does not define the full interaction interval reproducibly).
+
+## Implementation dependency compatibility note (2026-11-08)
+
+ESLint 10 cannot resolve with eslint-plugin-jsx-a11y 6.10.2, whose declared peer range ends
+at ESLint 9. Pin ESLint and @eslint/js to 9 for the current accessibility lint integration.
+This is a temporary dev-tool maintenance exception: npm reports ESLint 9.39.5 deprecated.
+No peer-dependency enforcement is bypassed. Keep CI lint and axe gates enabled. Recheck the
+plugin peer range during dependency upgrades and remove this exception when ESLint 10 is
+supported. The high-severity audit gate passed after installation; 11 moderate transitive
+advisories in drizzle-kit/esbuild and typescript-eslint/minimatch remain tracked by npm audit.
+Do not apply npm audit fix --force blindly: its proposed downgrade changes tool behavior.

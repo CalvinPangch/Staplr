@@ -1,0 +1,7 @@
+CREATE TABLE user(id TEXT PRIMARY KEY NOT NULL,username TEXT NOT NULL UNIQUE,passwordHash TEXT NOT NULL,createdAt TEXT NOT NULL,singleton INTEGER NOT NULL DEFAULT 1 CHECK(singleton=1));
+CREATE UNIQUE INDEX one_owner_idx ON user(singleton);
+CREATE TABLE session(id TEXT PRIMARY KEY NOT NULL,userId TEXT NOT NULL REFERENCES user(id) ON DELETE CASCADE,createdAt TEXT NOT NULL,expiresAt TEXT NOT NULL,lastSeenAt TEXT NOT NULL);
+CREATE TABLE audit_entry(id TEXT PRIMARY KEY NOT NULL,at TEXT NOT NULL,action TEXT NOT NULL,targetType TEXT NOT NULL,targetId TEXT NOT NULL,targetName TEXT NOT NULL,detail TEXT NOT NULL);
+CREATE TRIGGER audit_no_update BEFORE UPDATE ON audit_entry BEGIN SELECT RAISE(ABORT,'audit entries are append only'); END;
+CREATE TRIGGER audit_no_delete BEFORE DELETE ON audit_entry BEGIN SELECT RAISE(ABORT,'audit entries are append only'); END;
+CREATE TABLE error_event(id TEXT PRIMARY KEY NOT NULL,at TEXT NOT NULL,requestId TEXT NOT NULL,route TEXT NOT NULL,message TEXT NOT NULL,stack TEXT);

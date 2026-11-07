@@ -1,0 +1,87 @@
+/*
+ * Design tokens. Every text/background pair below meets WCAG 2.2 AA
+ * (4.5:1 for text, 3:1 for component borders and the focus ring), in both
+ * themes. Components use these tokens through the Tailwind theme in app.css;
+ * do not hard-code colors elsewhere.
+ */
+:root {
+  color-scheme: light;
+  --c-bg: #ffffff;
+  --c-surface: #f3f4f6;
+  --c-surface-strong: #e5e7eb;
+  --c-fg: #111827;
+  --c-muted: #4b5563;
+  --c-border: #6b7280;
+  --c-border-soft: #d1d5db;
+  --c-primary: #1d4ed8;
+  --c-primary-fg: #ffffff;
+  --c-link: #1d4ed8;
+  --c-danger: #b91c1c;
+  --c-danger-fg: #ffffff;
+  --c-danger-soft: #fef2f2;
+  --c-success: #15803d;
+  --c-success-soft: #f0fdf4;
+  --c-warning: #92400e;
+  --c-warning-soft: #fffbeb;
+  --c-info-soft: #eff6ff;
+  --c-focus: #1d4ed8;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --radius: 0.5rem;
+  --font-sans:
+    system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    sans-serif;
+  --font-mono: ui-monospace, 'Cascadia Code', Menlo, Consolas, monospace;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --c-bg: #0f172a;
+  --c-surface: #1e293b;
+  --c-surface-strong: #334155;
+  --c-fg: #f1f5f9;
+  --c-muted: #cbd5e1;
+  --c-border: #94a3b8;
+  --c-border-soft: #475569;
+  --c-primary: #93c5fd;
+  --c-primary-fg: #0f172a;
+  --c-link: #93c5fd;
+  --c-danger: #fca5a5;
+  --c-danger-fg: #0f172a;
+  --c-danger-soft: #3f1d1d;
+  --c-success: #86efac;
+  --c-success-soft: #14301f;
+  --c-warning: #fcd34d;
+  --c-warning-soft: #3b2f0b;
+  --c-info-soft: #1e3a5f;
+  --c-focus: #93c5fd;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --c-bg: #0f172a;
+    --c-surface: #1e293b;
+    --c-surface-strong: #334155;
+    --c-fg: #f1f5f9;
+    --c-muted: #cbd5e1;
+    --c-border: #94a3b8;
+    --c-border-soft: #475569;
+    --c-primary: #93c5fd;
+    --c-primary-fg: #0f172a;
+    --c-link: #93c5fd;
+    --c-danger: #fca5a5;
+    --c-danger-fg: #0f172a;
+    --c-danger-soft: #3f1d1d;
+    --c-success: #86efac;
+    --c-success-soft: #14301f;
+    --c-warning: #fcd34d;
+    --c-warning-soft: #3b2f0b;
+    --c-info-soft: #1e3a5f;
+    --c-focus: #93c5fd;
+  }
+}

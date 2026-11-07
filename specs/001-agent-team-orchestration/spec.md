@@ -8,6 +8,13 @@
 
 **Input**: User description: "i want to build an agent orchestration development team. we need to setup the github/gitlab token in the global settings. and we could create agent role/soul that can asigned to a project. (normally we have Project Manger , BA , Developer , QA) in the team. user can choose each agent is codex or cloude and its model. the codex/cloude need to login via sandbox and need to save the login information so that it can be reuse."
 
+## Authentication revision (2026-11-08)
+
+The user requested fixing the provider feasibility blocker. Claude now uses the owner's
+Anthropic API key with direct provider billing. Codex retains its sandbox account login.
+Earlier clarification references to both providers using saved subscription logins are
+superseded by this revision and FR-006–FR-012 below.
+
 ## Clarifications
 
 ### Session 2026-11-08
@@ -96,40 +103,38 @@ form.
 
 ---
 
-### User Story 2 - Connect an AI Provider via Sandbox Login and Reuse It (Priority: P1)
+### User Story 2 - Connect AI Providers and Reuse Credentials (Priority: P1)
 
-The user connects a Codex (OpenAI) or Claude (Anthropic) account. The system starts an isolated
-sandbox session where the user completes the provider's own login flow. Once login succeeds, the
-session's login information is saved as a named provider connection so agents can use it later
-without logging in again.
+The user connects Claude with their own Anthropic API key and Codex through its account login
+in an isolated sandbox. Credentials are stored encrypted and reused without repeated setup.
+Claude usage is billed by Anthropic directly to the key owner; subscription login credentials
+are not collected by Staplr.
 
-**Why this priority**: Agents cannot run without an authenticated AI provider, and logging in again
-for every agent or every run would make the product unusable.
+**Why this priority**: Agents need an authenticated provider before they can be configured.
 
-**Independent Test**: Complete a Claude sandbox login, close the browser, return the next day, and
-confirm the provider connection is still "Connected", passes "Check now", and can be selected for
-an agent without logging in again. Repeat for Codex.
+**Independent Test**: Save a valid Claude key; restart Staplr and check the connection without
+re-entering it. Complete a Codex sandbox login and repeat the reuse check. Invalid credentials
+are rejected and never saved. Both flows leave no secret in responses, logs or audit entries.
 
 **Acceptance Scenarios**:
 
-1. **Given** no provider connection exists, **When** the user chooses "Connect Claude" (or
-   "Connect Codex"), **Then** a sandbox login session opens that guides them through the
-   provider's login flow.
-2. **Given** a sandbox login in progress, **When** the user completes login, **Then** the system
-   saves the login information securely, names the provider connection, shows it as "Connected",
-   and closes the sandbox session.
-3. **Given** a sandbox login in progress, **When** the user cancels or the session times out,
-   **Then** nothing is saved and the user can restart the login.
-4. **Given** a provider connection created on an earlier day, **When** the user creates or edits an
-   agent, **Then** they can select that provider connection without logging in again, and it
-   passes "Check now".
-5. **Given** a saved login that the provider has expired or revoked, **When** the next health check
-   runs, **Then** the provider connection is marked "Needs re-login", affected agents and projects
-   show "Not ready", and the user can re-login through a new sandbox session without reconfiguring
-   those agents.
-6. **Given** a provider connection used by agents, **When** the user disconnects it, **Then** the
-   system first warns and lists the affected agents and projects; after confirmation the saved
-   login information is deleted and those agents show "Not ready: no provider connection".
+1. **Given** no Claude connection, **When** the user enters a name and their API key, **Then**
+   Staplr verifies the key and lists the connection as Connected without returning the key.
+2. **Given** a Codex sandbox login, **When** login succeeds and the user confirms completion,
+   **Then** the encrypted credentials are saved as a named connection and the sandbox is removed.
+3. **Given** invalid or rejected credentials, **When** the user saves them, **Then** nothing is
+   saved and the error explains how to retry; a transient provider failure also saves nothing.
+4. **Given** saved connections, **When** Staplr restarts or the user configures agents later,
+   **Then** each connection can be checked and reused without repeating its setup.
+5. **Given** expired/revoked credentials, **When** a check confirms authentication failure,
+   **Then** the connection shows Needs re-login, its agents/projects show Not ready, and the
+   fix action is Replace API key for Claude or Re-login for Codex, retaining the connection ID.
+6. **Given** a used connection, **When** the user disconnects it, **Then** a confirmation lists
+   affected agents/projects; confirming removes the credentials and makes them Not ready.
+7. **Given** a Codex login, **When** the user cancels or it expires after 15 minutes of inactivity,
+   **Then** nothing is saved and its sandbox is destroyed. Concurrent logins remain independent.
+8. **Given** a Claude key replacement, **When** validation fails, **Then** the previous encrypted
+   key remains intact; successful replacement invalidates prior model-access checks.
 
 ---
 
@@ -186,7 +191,7 @@ provider, and model, and that only models for the selected provider are offered.
    available for that provider are offered.
 3. **Given** no connected provider connection exists for a provider, **When** the user selects that
    provider, **Then** the system explains that a provider connection is required and offers to
-   start a sandbox login.
+   enter a Claude API key or start a Codex sandbox login, as appropriate.
 4. **Given** an existing agent, **When** the user changes its soul, provider, provider connection,
    or model, **Then** the change is saved and applies to the agent's next ticket.
 5. **Given** a model the provider has retired or that the provider connection can no longer access,
@@ -311,7 +316,7 @@ and by keyboard; reload and confirm every position is kept.
   health check marks the connection "Needs attention" and lists the missing permission.
 - A source control token is revoked outside Staplr: the next health check (or "Check now") marks the
   connection "Needs attention" and its projects "Not ready".
-- Two sandbox logins for the same provider run at once: each successful login creates its own
+- Two Codex sandbox logins run at once: each successful login creates its own
   separate provider connection; neither overwrites the other.
 - The user closes the browser during a sandbox login: the session expires after its timeout and
   nothing is saved.
@@ -345,7 +350,7 @@ and by keyboard; reload and confirm every position is kept.
 
 - **Source control connection**: "Connected" or "Needs attention" (with the reason: invalid,
   expired, revoked, or missing a named permission).
-- **Provider connection**: "Connected" or "Needs re-login".
+- **Provider connection**: "Connected" or "Needs re-login" (Claude fix: Replace API key; Codex fix: Re-login). Retryable check errors are shown separately.
 - **Agent**: "Ready" or "Not ready" (with the reason: needs re-login, no provider connection, or
   model unavailable).
 - **Project download**: "Downloading", "Downloaded", or "Download failed".
@@ -372,20 +377,12 @@ and by keyboard; reload and confirm every position is kept.
 **AI provider connections**
 
 - **FR-006**: System MUST support two AI providers: Codex (OpenAI) and Claude (Anthropic).
-- **FR-007**: System MUST let the user create a provider connection by completing the provider's
-  own login flow inside a sandbox login session.
-- **FR-008**: Sandbox login sessions MUST run on the user's installation, isolated from the rest of
-  the system and from agent working copies. A session MUST end automatically after 15 minutes of
-  inactivity and MUST be destroyed once login completes, fails, or is cancelled.
-- **FR-009**: System MUST save the login information from a successful sandbox login, encrypted, as
-  a provider connection that agents can use later without the user logging in again.
-- **FR-010**: System MUST let the user name provider connections and MUST allow more than one per
-  provider. Concurrent sandbox logins each create their own provider connection.
-- **FR-011**: When a provider connection fails a health check because the login expired or was
-  revoked, the system MUST mark it "Needs re-login" and let the user re-login through a new sandbox
-  session while keeping every agent that uses it.
-- **FR-012**: System MUST warn and list affected agents and projects before a provider connection
-  is disconnected, and MUST delete all its stored login information once disconnected.
+- **FR-007**: System MUST let the user connect Claude with their own Anthropic API key and Codex by completing its own login flow in a sandbox. Claude subscription credentials MUST NOT be collected or stored by Staplr.
+- **FR-008**: Codex login sandboxes MUST run on the user's installation, isolated from the system and agent working copies, expire after 15 minutes of inactivity, and be destroyed on completion, failure or cancellation.
+- **FR-009**: System MUST encrypt saved Claude API keys and successful Codex login information at rest, reuse them for the selected connection, and never return credential values in API responses or logs.
+- **FR-010**: System MUST allow named multiple connections for each provider. Concurrent Codex logins MUST create separate connections. Claude API key entry MUST explain direct Anthropic API billing.
+- **FR-011**: Confirmed expired/revoked authentication MUST mark a provider connection Needs re-login. Claude MUST offer Replace API key and Codex MUST offer sandbox Re-login, preserving its ID and agent links. Failed replacement MUST retain the prior credential. Transient network, rate-limit and service errors MUST be retryable without falsely marking credentials revoked.
+- **FR-012**: System MUST warn and list affected agents/projects before disconnecting a connection, and delete all its saved credentials on confirmation.
 
 **Connection health checks**
 
@@ -412,12 +409,11 @@ and by keyboard; reload and confirm every position is kept.
 
 - **FR-020**: The user MUST be able to create an agent by choosing a name, a soul, a provider, a
   provider connection, and a model. An agent's role is the role type of its soul.
-- **FR-021**: System MUST offer only the models available to the selected provider connection.
+- **FR-021**: System MUST offer only non-retired models verified available to the selected provider connection. Unknown availability MUST be shown disabled with a Check availability action. Server-side agent creation/edits MUST enforce the same rule; a catalog entry alone is not proof of access.
 - **FR-022**: The user MUST be able to change an agent's soul, provider, provider connection, or
   model; changes apply from the agent's next ticket. System MUST block a soul change that would
   leave any of the agent's projects with no Project Manager or with two of them.
-- **FR-023**: System MUST show an agent as "Not ready", with the reason, when its provider
-  connection needs re-login or is gone, or its model is no longer available.
+- **FR-023**: An agent MUST be Not ready with a reason if its provider connection is missing or needs re-login, its model is retired, or model availability for its current credentials is unknown or denied. Authentication and model-access failures MUST be distinguished. Transient check failures MUST preserve the last confirmed state and expose a retry action.
 - **FR-024**: The user MUST be able to delete an agent that is not on any project team. Deletion of
   an agent on a project team MUST be blocked, listing those projects.
 
@@ -478,8 +474,7 @@ and by keyboard; reload and confirm every position is kept.
 - **FR-038**: System MUST provide a cost estimate rule: given a model, input and output token
   counts, and a run time, it returns the cost using the price in effect at that time, or "Unknown"
   when no price is known.
-- **FR-039**: Every money figure MUST be labeled "estimated" and MUST NOT be presented as an invoice
-  or the provider's actual charge, because agents use subscription logins.
+- **FR-039**: Every money figure MUST be labeled estimated and MUST NOT be represented as an invoice or actual provider charge. Claude uses direct API billing; Codex uses account-based access, and list-price estimates may differ from actual charges.
 - **FR-040**: The next feature MUST record every agent run as a usage record (see Key Entities)
   using the rule in FR-038. It also provides the usage view (totals by spec, by model, and by
   agent, with a date-range filter), the CSV export, and the report-only rule (no budgets, limits,
@@ -528,10 +523,9 @@ and by keyboard; reload and confirm every position is kept.
 - **Source Control Connection**: A GitHub or GitLab account linked by token. Attributes: name,
   platform, instance address, account name, granted permissions, masked token, status, last check
   time and result.
-- **Provider Connection**: A saved login for Codex or Claude, created through a sandbox login
-  session. Attributes: provider, name, status, created time, last check time and result. Stored
-  login information is encrypted.
-- **Sandbox Login Session**: A short-lived, isolated session used only to complete a provider login.
+- **Provider Connection**: A Claude API-key connection or saved Codex account login. Attributes: provider, authentication type, name, status, credential revision, last check time and result. Credentials are encrypted.
+- **Model Access**: The latest availability evidence for a provider connection/model pair, tied to its credential and catalog revisions, with check time and a retryable error when applicable.
+- **Sandbox Login Session**: A short-lived, isolated session used only to complete a Codex login.
   Attributes: provider, status (In progress / Succeeded / Failed / Cancelled / Expired), start and
   end times.
 - **Soul**: A reusable role definition. Attributes: name, role type (Project Manager / Business
@@ -561,14 +555,14 @@ and by keyboard; reload and confirm every position is kept.
 - **SC-001**: A new user can connect a source control account, connect one AI provider, and assemble
   a four-role team (PM, BA, Developer, QA) on a project in under 15 minutes, not counting the time
   the repository takes to download.
-- **SC-002**: A provider connection still passes its health check 30 days after the sandbox login,
-  without the user logging in again, unless the provider expired or revoked the login.
+- **SC-002**: A provider connection still passes its health check 30 days after setup,
+  without credential re-entry, unless the provider expired or revoked the credential.
 - **SC-003**: 100% of invalid tokens, and of tokens missing a required permission, are rejected at
   save time with a message that names the problem.
 - **SC-004**: Security testing finds no stored token or login secret in plain text in the user
-  interface, logs, or audit entries.
+  interface, logs, or audit entries, including Claude API keys.
 - **SC-005**: In usability testing, at least 4 of 5 test users complete the sandbox login on their
-  first attempt without help.
+  first attempt without help (Codex sandbox login).
 - **SC-006**: When a token or provider login stops working, the connection and every affected agent
   and project show "Needs attention", "Needs re-login", or "Not ready" with a fix action within 70
   minutes (hourly checks plus the time they take to run), or immediately after "Check now".
@@ -599,14 +593,13 @@ and by keyboard; reload and confirm every position is kept.
   ticket" mean the same thing. Token counts will come from what the Codex/Claude tools report after
   each run.
 - Codex and Claude are the only providers in scope; the design allows others to be added later.
-- Each AI provider offers an interactive login flow (account sign-in) that can be completed in a
-  sandboxed environment and produces reusable login information. API-key-only setup is out of
-  scope for this feature.
-- **Dependency to verify before implementation**: the Codex and Claude subscription terms must
-  allow saved logins to be reused by automated agents. If they do not, API-key connections must be
-  brought back into scope.
+- Codex offers an interactive account login producing reusable credentials. Claude connections
+  use owner-provisioned Anthropic API keys; Claude subscription OAuth capture is out of scope.
+- Provider integration uses the official authentication mechanisms documented in research R18.
+  Provider checks must distinguish authentication failure, model denial and transient errors.
+
 - The list of models for each provider is retrieved from or maintained for that provider and
-  refreshed periodically.
+  updated with application releases and reconciled on startup. Connection-specific model access is checked at startup, hourly and on demand; catalog updates do not prove entitlement.
 - A project links to exactly one repository in this version; projects spanning several
   repositories are out of scope.
 - Default soul content (responsibilities and instructions for PM, BA, Developer, QA) is provided by

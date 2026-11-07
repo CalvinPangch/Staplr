@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Staplr API — Agent Team Orchestration Setup
-  version: 0.1.0
+  version: 0.2.0
   description: |
     HTTP API for spec 001. All routes require the session cookie (cookieAuth) except
     POST /api/setup (only while no user exists), GET /api/setup/status and POST /api/session.
@@ -94,6 +94,26 @@ paths:
 
   # ---------- Provider connections + sandbox (FR-006..012) ----------
   /api/provider-connections:
+    post:
+      summary: Add a Claude connection with the owner's API key
+      description: Validates before saving; subscription credentials are not accepted. Billing goes directly to the key owner.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [provider, authType, name, apiKey]
+              properties:
+                provider: { type: string, const: claude }
+                authType: { type: string, const: api_key }
+                name: { type: string, minLength: 1, maxLength: 80 }
+                apiKey: { type: string, minLength: 1, maxLength: 4096, writeOnly: true }
+      responses:
+        '201': { description: Connected, content: { application/json: { schema: { $ref: '#/components/schemas/ProviderConnection' } } } }
+        '422': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
     get:
       summary: List provider connections
       responses:
@@ -107,6 +127,37 @@ paths:
     delete:
       summary: Disconnect and delete the stored login
       responses: { '204': { description: Disconnected } }
+  /api/provider-connections/{id}/api-key:
+    parameters: [ { $ref: '#/components/parameters/Id' } ]
+    put:
+      summary: Validate and replace a Claude API key in place
+      description: Failed validation retains the previous key. Success increments credentialRevision and invalidates model access.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [apiKey]
+              properties:
+                apiKey: { type: string, minLength: 1, maxLength: 4096, writeOnly: true }
+      responses:
+        '200': { description: Replaced, content: { application/json: { schema: { $ref: '#/components/schemas/ProviderConnection' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /api/provider-connections/{id}/models/{model}/check:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+      - { name: model, in: path, required: true, schema: { type: string, minLength: 1, maxLength: 200 } }
+    post:
+      summary: Check this exact model for this connection
+      description: Claude uses authenticated model discovery; Codex may consume subscription usage with a minimal probe. No silent model fallback.
+      responses:
+        '200': { description: Result including retryable check metadata, content: { application/json: { schema: { $ref: '#/components/schemas/ModelAccess' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
   /api/provider-connections/{id}/impact:
     parameters: [ { $ref: '#/components/parameters/Id' } ]
     get:
@@ -116,24 +167,31 @@ paths:
   /api/provider-connections/{id}/check:
     parameters: [ { $ref: '#/components/parameters/Id' } ]
     post:
-      summary: Check now (includes a minimal real call; research R6)
+      summary: Check authentication and assigned model access (research R6)
       responses: { '200': { description: Result, content: { application/json: { schema: { $ref: '#/components/schemas/ProviderConnection' } } } } }
   /api/sandbox-sessions:
     post:
-      summary: Start a sandbox login session (see sandbox-terminal.md)
+      summary: Start a Codex sandbox login session (see sandbox-terminal.md)
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
+              additionalProperties: false
               required: [provider]
+              oneOf:
+                - required: [name]
+                  not: { required: [reloginOf] }
+                - required: [reloginOf]
+                  not: { required: [name] }
               properties:
-                provider: { $ref: '#/components/schemas/Provider' }
+                provider: { type: string, const: codex }
                 name: { type: string, minLength: 1, maxLength: 80, description: Name for the new connection (required unless reloginOf) }
                 reloginOf: { type: string, description: Existing provider connection to re-login }
       responses:
         '201': { description: Started, content: { application/json: { schema: { $ref: '#/components/schemas/SandboxSession' } } } }
+        '422': { $ref: '#/components/responses/Problem' }
         '503': { description: Docker unavailable, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
   /api/sandbox-sessions/{id}:
     parameters: [ { $ref: '#/components/parameters/Id' } ]
@@ -192,9 +250,24 @@ paths:
   # ---------- Agents + models (FR-020..024) ----------
   /api/models:
     get:
-      summary: Selectable models for a provider (catalog, retired excluded)
-      parameters: [ { name: provider, in: query, required: true, schema: { $ref: '#/components/schemas/Provider' } } ]
-      responses: { '200': { description: OK, content: { application/json: { schema: { type: array, items: { type: object, properties: { id: { type: string }, label: { type: string } } } } } } } }
+      summary: Catalog candidates with connection-specific availability
+      description: Only available entries are selectable. Unknown entries remain disabled with Check availability. No secret is returned.
+      parameters:
+        - { name: providerConnectionId, in: query, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Model candidates and freshness metadata
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [catalogRevision, models]
+                properties:
+                  catalogRevision: { type: string }
+                  models: { type: array, items: { $ref: '#/components/schemas/ModelAccess' } }
+        '404': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+
   /api/agents:
     get:
       summary: List agents with readiness
@@ -449,11 +522,29 @@ components:
         fullName: { type: string }
         defaultBranch: { type: string }
         private: { type: boolean }
+    ModelAccess:
+      type: object
+      additionalProperties: false
+      required: [providerConnectionId, id, label, availability, credentialRevision, catalogRevision, lastVerifiedAt, lastAttemptAt, checkError]
+      properties:
+        providerConnectionId: { type: string }
+        id: { type: string }
+        label: { type: string }
+        availability: { type: string, enum: [available, unavailable, unknown] }
+        credentialRevision: { type: integer, minimum: 1 }
+        catalogRevision: { type: string }
+        lastVerifiedAt: { type: [string, 'null'], format: date-time }
+        lastAttemptAt: { type: [string, 'null'], format: date-time }
+        checkError: { type: [string, 'null'], description: Bounded secret-free error code; no raw provider response }
     ProviderConnection:
       type: object
+      additionalProperties: false
+      required: [id, provider, name, authType, credentialRevision, status, credentialExpiresAt, lastCheckedAt, lastCheckResult]
       properties:
         id: { type: string }
         provider: { $ref: '#/components/schemas/Provider' }
+        authType: { type: string, enum: [api_key, codex_login] }
+        credentialRevision: { type: integer, minimum: 1 }
         name: { type: string }
         status: { type: string, enum: [connected, needs_relogin] }
         credentialExpiresAt: { type: [string, 'null'], format: date-time }
@@ -468,7 +559,7 @@ components:
       type: object
       properties:
         id: { type: string }
-        provider: { $ref: '#/components/schemas/Provider' }
+        provider: { type: string, const: codex }
         status: { type: string, enum: [in_progress, succeeded, failed, cancelled, expired] }
         failureReason: { type: [string, 'null'] }
         terminalUrl: { type: string, description: 'WebSocket path, e.g. /api/sandbox-sessions/{id}/terminal' }
@@ -602,7 +693,7 @@ components:
       properties:
         id: { type: string }
         at: { type: string, format: date-time }
-        action: { type: string, enum: [scc.added, scc.replaced, scc.removed, provider.added, provider.relogged, provider.removed] }
+        action: { type: string, enum: [scc.added, scc.replaced, scc.removed, provider.added, provider.replaced, provider.relogged, provider.removed] }
         targetType: { type: string }
         targetId: { type: string }
         targetName: { type: string }

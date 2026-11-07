@@ -46,3 +46,10 @@
   Story 6), FR-042 (API routes, app shell), SC-004, SC-006 (70 minutes); restart-recovery edge case
   and HTTPS assumption added. Design files and tasks updated (154 tasks). All items pass.
 - Items marked incomplete require spec updates before `/speckit-clarify` or `/speckit-plan`
+
+- Iteration 6 (2026-11-08, user-requested blocker fix): Claude uses owner-provided Anthropic
+  API keys with direct API billing; Codex retains sandbox account login. Removed Claude OAuth
+  collection from active design. Added connection-specific model evidence, catalog lifecycle,
+  test-first cross-cutting scheduling, formatting gate and browser performance validation.
+  Spec, plan, research, data model, contracts, quickstart and 156 tasks are aligned. These are
+  design checks; runtime and live-provider verification remain implementation tasks.
