@@ -40,6 +40,7 @@ import { createTeamService } from './modules/projects/team-service.js';
 import { registerAgentImpact } from './modules/agents/impact.js';
 import { createAgentService } from './modules/agents/service.js';
 import { priceRoutes } from './modules/prices/routes.js';
+import { createPriceService, mergeCatalog } from './modules/prices/service.js';
 import { soulRoutes } from './modules/souls/routes.js';
 import { createSoulService } from './modules/souls/service.js';
 import { sourceControlRoutes } from './modules/source-control/routes.js';
@@ -203,7 +204,11 @@ export function buildApp({
   app.decorate('agents', agents);
   registerAgentImpact({ db, impact: impactRegistry, souls });
   agentRoutes(app, agents);
-  priceRoutes(app, providers);
+  // The catalog shipped with this release is merged before anything reads prices or models.
+  mergeCatalog(db, new Date(clock()).toISOString());
+  const prices = createPriceService({ db, clock });
+  app.decorate('prices', prices);
+  priceRoutes(app, providers, prices);
   const downloads = createDownloadManager({
     db,
     config,

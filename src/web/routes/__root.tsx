@@ -20,6 +20,7 @@ const navItems = [
   { to: '/projects', label: 'Projects' },
   { to: '/souls', label: 'Souls' },
   { to: '/agents', label: 'Agents' },
+  { to: '/model-prices', label: 'Prices' },
   { to: '/audit', label: 'Audit' },
 ] as const;
 

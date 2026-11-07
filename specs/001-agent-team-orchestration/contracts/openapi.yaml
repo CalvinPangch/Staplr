@@ -520,6 +520,7 @@ paths:
                 outputPricePerMTok: { type: string, pattern: '^\d+(\.\d{1,6})?$' }
       responses:
         '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/ModelPrice' } } } }
+        '422': { $ref: '#/components/responses/Problem' }
 
   # ---------- Audit + diagnostics (FR-041, R12) ----------
   /api/audit-entries:
@@ -774,7 +775,7 @@ components:
       properties:
         id: { type: string }
         at: { type: string, format: date-time }
-        action: { type: string, enum: [scc.added, scc.replaced, scc.removed, provider.added, provider.replaced, provider.relogged, provider.removed, soul.created, soul.updated, soul.copied, soul.deleted, agent.created, agent.updated, agent.deleted, project.created, project.deleted] }
+        action: { type: string, enum: [scc.added, scc.replaced, scc.removed, provider.added, provider.replaced, provider.relogged, provider.removed, soul.created, soul.updated, soul.copied, soul.deleted, agent.created, agent.updated, agent.deleted, project.created, project.deleted, price.changed] }
         targetType: { type: string }
         targetId: { type: string }
         targetName: { type: string }

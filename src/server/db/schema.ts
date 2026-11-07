@@ -185,3 +185,17 @@ export const usageRecords = sqliteTable('usage_record', {
   estimatedCostUsd: text('estimatedCostUsd'),
   priceId: text('priceId'),
 });
+export const modelPrices = sqliteTable('model_price', {
+  id: text('id').primaryKey(),
+  provider: text('provider', { enum: ['claude', 'codex'] }).notNull(),
+  model: text('model').notNull(),
+  // USD per million tokens as decimal text; null means Unknown
+  inputPricePerMTok: text('inputPricePerMTok'),
+  outputPricePerMTok: text('outputPricePerMTok'),
+  priceSource: text('priceSource'),
+  pricesAsOf: text('pricesAsOf'),
+  effectiveFrom: text('effectiveFrom').notNull(),
+  // null means this is the current price
+  effectiveUntil: text('effectiveUntil'),
+  source: text('source', { enum: ['default', 'user'] }).notNull(),
+});
