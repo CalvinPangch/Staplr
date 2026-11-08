@@ -1,0 +1,4 @@
+{$PUBLIC_URL} {
+  tls internal
+  reverse_proxy staplr:3000
+}

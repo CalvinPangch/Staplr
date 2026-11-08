@@ -1,0 +1,819 @@
+openapi: 3.1.0
+info:
+  title: Staplr API — Agent Team Orchestration Setup
+  version: 0.2.0
+  description: |
+    HTTP API for spec 001. All routes require the session cookie (cookieAuth) except
+    POST /api/setup (only while no user exists), GET /api/setup/status and POST /api/session.
+    State-changing requests must send a same-origin `Origin` header. Errors use the Problem schema.
+    No response ever contains a secret; tokens appear only as `tokenLast4`.
+servers:
+  - url: http://localhost:3000
+security:
+  - cookieAuth: []
+
+paths:
+  # ---------- Auth (FR-042) ----------
+  /api/setup/status:
+    get:
+      security: []
+      summary: Whether first-run setup is still needed
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, required: [needsSetup], properties: { needsSetup: { type: boolean } } } } } }
+  /api/setup:
+    post:
+      security: []
+      summary: Create the single user (rejected once a user exists)
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/Credentials' } } } }
+      responses:
+        '201': { description: User created and signed in; sets session cookie }
+        '409': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+  /api/session:
+    post:
+      security: []
+      summary: Sign in
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/Credentials' } } } }
+      responses:
+        '204': { description: Signed in; sets session cookie }
+        '401': { $ref: '#/components/responses/Problem' }
+    get:
+      summary: Current session
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { username: { type: string } } } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+    delete:
+      summary: Sign out
+      responses: { '204': { description: Signed out } }
+
+  # ---------- Source control (FR-001..005, FR-013, FR-025, FR-029) ----------
+  /api/source-control-connections:
+    get:
+      summary: List connections
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/SourceControlConnection' } } } } }
+    post:
+      summary: Add a connection; the token is validated before anything is stored
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/SourceControlConnectionCreate' } } } }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/SourceControlConnection' } } } }
+        '409': { $ref: '#/components/responses/Problem' }
+        '422': { description: Invalid input, or invalid token or missing permissions (code invalid_input | token_invalid | token_missing_permissions; details.missingPermissions), content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '503': { $ref: '#/components/responses/Problem' }
+  /api/source-control-connections/{id}:
+    parameters: [ { $ref: '#/components/parameters/Id' } ]
+    patch:
+      summary: Rename and/or replace the token (a new token is validated the same way)
+      requestBody: { required: true, content: { application/json: { schema: { type: object, properties: { name: { type: string, minLength: 1, maxLength: 80 }, token: { type: string, writeOnly: true } } } } } }
+      responses:
+        '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/SourceControlConnection' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+    delete:
+      summary: Remove a connection; projects using it become Not ready
+      responses:
+        '204': { description: Removed }
+        '404': { $ref: '#/components/responses/Problem' }
+  /api/source-control-connections/{id}/check:
+    parameters: [ { $ref: '#/components/parameters/Id' } ]
+    post:
+      summary: Check now
+      responses:
+        '200': { description: Check result, content: { application/json: { schema: { $ref: '#/components/schemas/SourceControlConnection' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+  /api/source-control-connections/{id}/repositories:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+      - { name: q, in: query, schema: { type: string, maxLength: 200 } }
+    get:
+      summary: Repositories this connection can push to (searchable)
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Repository' } } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /api/source-control-connections/{id}/repositories/{repoRemoteId}/branches:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+      - { name: repoRemoteId, in: path, required: true, schema: { type: string } }
+    get:
+      summary: Branches of a repository (base-branch picker)
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: array, items: { type: string } } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+
+  # ---------- Provider connections + sandbox (FR-006..012) ----------
+  /api/provider-connections:
+    post:
+      summary: Add a Claude connection with the owner's API key
+      description: Validates before saving; subscription credentials are not accepted. Billing goes directly to the key owner.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [provider, authType, name, apiKey]
+              properties:
+                provider: { type: string, const: claude }
+                authType: { type: string, const: api_key }
+                name: { type: string, minLength: 1, maxLength: 80 }
+                apiKey: { type: string, minLength: 1, maxLength: 4096, writeOnly: true }
+      responses:
+        '201': { description: Connected, content: { application/json: { schema: { $ref: '#/components/schemas/ProviderConnection' } } } }
+        '409': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+    get:
+      summary: List provider connections
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/ProviderConnection' } } } } }
+  /api/provider-connections/{id}:
+    parameters: [ { $ref: '#/components/parameters/Id' } ]
+    patch:
+      summary: Rename
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [name], properties: { name: { type: string, minLength: 1, maxLength: 80 } } } } } }
+      responses:
+        '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/ProviderConnection' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+    delete:
+      summary: Disconnect and delete the stored login
+      responses:
+        '204': { description: Disconnected }
+        '404': { $ref: '#/components/responses/Problem' }
+  /api/provider-connections/{id}/api-key:
+    parameters: [ { $ref: '#/components/parameters/Id' } ]
+    put:
+      summary: Validate and replace a Claude API key in place
+      description: Failed validation retains the previous key. Success increments credentialRevision and invalidates model access.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [apiKey]
+              properties:
+                apiKey: { type: string, minLength: 1, maxLength: 4096, writeOnly: true }
+      responses:
+        '200': { description: Replaced, content: { application/json: { schema: { $ref: '#/components/schemas/ProviderConnection' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /api/provider-connections/{id}/models/{model}/check:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+      - { name: model, in: path, required: true, schema: { type: string, minLength: 1, maxLength: 200 } }
+    post:
+      summary: Check this exact model for this connection
+      description: Claude uses authenticated model discovery; Codex may consume subscription usage with a minimal probe. No silent model fallback.
+      responses:
+        '200': { description: Result including retryable check metadata, content: { application/json: { schema: { $ref: '#/components/schemas/ModelAccess' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+  /api/provider-connections/{id}/impact:
+    parameters: [ { $ref: '#/components/parameters/Id' } ]
+    get:
+      summary: Agents and projects affected by disconnecting (shown in the warning)
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Impact' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+  /api/provider-connections/{id}/check:
+    parameters: [ { $ref: '#/components/parameters/Id' } ]
+    post:
+      summary: Check authentication and assigned model access (research R6); for Codex also rediscovers models (feature 002)
+      responses:
+        '200': { description: Result, content: { application/json: { schema: { $ref: '#/components/schemas/ProviderConnection' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+  /api/provider-connections/{id}/discover:
+    parameters: [ { $ref: '#/components/parameters/Id' } ]
+    post:
+      summary: Refresh models — list and check every model this Codex login can use (feature 002)
+      description: A request while discovery is already running joins it; no second run starts.
+      responses:
+        '202': { description: Discovery running, content: { application/json: { schema: { $ref: '#/components/schemas/ProviderConnection' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /api/sandbox-sessions:
+    post:
+      summary: Start a Codex sandbox login session (see sandbox-terminal.md)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [provider]
+              oneOf:
+                - required: [name]
+                  not: { required: [reloginOf] }
+                - required: [reloginOf]
+                  not: { required: [name] }
+              properties:
+                provider: { type: string, const: codex }
+                name: { type: string, minLength: 1, maxLength: 80, description: Name for the new connection (required unless reloginOf) }
+                reloginOf: { type: string, description: Existing provider connection to re-login }
+      responses:
+        '201': { description: Started, content: { application/json: { schema: { $ref: '#/components/schemas/SandboxSession' } } } }
+        '404': { description: reloginOf does not exist, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '409': { description: Name already in use for Codex, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '422': { $ref: '#/components/responses/Problem' }
+        '503': { description: Docker unavailable, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+  /api/sandbox-sessions/{id}:
+    parameters: [ { $ref: '#/components/parameters/Id' } ]
+    get:
+      summary: Session status
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/SandboxSession' } } } }
+        '404': { description: Unknown session, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+    delete:
+      summary: Cancel; destroys the container, saves nothing (cancelling an ended session is harmless)
+      responses:
+        '204': { description: Cancelled }
+        '404': { description: Unknown session, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+  /api/sandbox-sessions/{id}/complete:
+    parameters: [ { $ref: '#/components/parameters/Id' } ]
+    post:
+      summary: User says login is finished; Staplr verifies credentials exist, saves the bundle, destroys the container
+      responses:
+        '200': { description: Succeeded, content: { application/json: { schema: { $ref: '#/components/schemas/SandboxSession' } } } }
+        '404': { description: Unknown session, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '409': { description: Credentials not found yet (code login_not_complete, session stays open) or the session already ended (code conflict), content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '503': { description: Docker unavailable, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+
+  # ---------- Health (FR-013, FR-014) ----------
+  /api/health/check-all:
+    post:
+      summary: Check now for every connection
+      responses: { '202': { description: Started; results appear on each connection } }
+
+  # ---------- Souls (FR-015..019) ----------
+  /api/souls:
+    get:
+      summary: List souls
+      responses: { '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Soul' } } } } } }
+    post:
+      summary: Create a soul from scratch (roleType project_manager rejected)
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/SoulInput' } } } }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Soul' } } } }
+        '409': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+  /api/souls/{id}:
+    parameters: [ { $ref: '#/components/parameters/Id' } ]
+    get:
+      summary: Get soul
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Soul' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+    put:
+      summary: Edit a custom soul (defaults are read-only → 403); roleType cannot change
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/SoulInput' } } } }
+      responses:
+        '200': { description: Updated; body lists affected agents, content: { application/json: { schema: { $ref: '#/components/schemas/Soul' } } } }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+    delete:
+      summary: Delete a custom soul (409 with details.agents when in use)
+      responses:
+        '204': { description: Deleted }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /api/souls/{id}/copy:
+    parameters: [ { $ref: '#/components/parameters/Id' } ]
+    post:
+      summary: Copy a soul (keeps roleType)
+      description: Without a name the copy is called "Copy of <name>", numbered if that is taken.
+      requestBody: { content: { application/json: { schema: { type: object, additionalProperties: false, properties: { name: { type: string, minLength: 1, maxLength: 80 } } } } } }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Soul' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+
+  # ---------- Agents + models (FR-020..024) ----------
+  /api/models:
+    get:
+      summary: Catalog candidates with connection-specific availability
+      description: Only available entries are selectable. Unknown entries remain disabled with Check availability. No secret is returned.
+      parameters:
+        - { name: providerConnectionId, in: query, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Model candidates and freshness metadata
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [catalogRevision, models]
+                properties:
+                  catalogRevision: { type: string }
+                  models: { type: array, items: { $ref: '#/components/schemas/ModelAccess' } }
+                  discoveryStatus: { type: string, enum: [not_started, running, finished, failed], description: Feature 002; Codex connections only change it }
+                  modelsRefreshedAt: { type: [string, 'null'], format: date-time }
+        '404': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+
+  /api/agents:
+    get:
+      summary: List agents with readiness
+      responses: { '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Agent' } } } } } }
+    post:
+      summary: Create agent
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AgentInput' } } } }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Agent' } } } }
+        '409': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+  /api/agents/{id}:
+    parameters: [ { $ref: '#/components/parameters/Id' } ]
+    get:
+      summary: Get agent
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Agent' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+    put:
+      summary: Edit agent (409 code pm_rule_violation with details.projects when a soul change breaks exactly-one-PM)
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AgentInput' } } } }
+      responses:
+        '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/Agent' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+    delete:
+      summary: Delete agent (409 code agent_in_use with details.projects)
+      responses:
+        '204': { description: Deleted }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+
+  # ---------- Projects + teams (FR-025..034) ----------
+  /api/projects:
+    get:
+      summary: List projects (deleted hidden) with readiness
+      responses: { '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Project' } } } } } }
+    post:
+      summary: Add project from a repository; starts the download
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sourceControlConnectionId, repoRemoteId]
+              properties:
+                sourceControlConnectionId: { type: string }
+                repoRemoteId: { type: string }
+                name: { type: string, minLength: 1, maxLength: 80 }
+      responses:
+        '202': { description: Created; downloadStatus=downloading, content: { application/json: { schema: { $ref: '#/components/schemas/Project' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /api/projects/{id}:
+    parameters: [ { $ref: '#/components/parameters/Id' } ]
+    get:
+      summary: Project with readiness reasons and download progress
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Project' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+    patch:
+      summary: Rename, change base branch, or relink repository
+      requestBody: { required: true, content: { application/json: { schema: { type: object, properties: { name: { type: string }, baseBranch: { type: string }, relink: { type: object, properties: { sourceControlConnectionId: { type: string }, repoRemoteId: { type: string } } } } } } } }
+      responses:
+        '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/Project' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+    delete:
+      summary: Delete project (removes code, working copies, team, tickets; keeps agents and usage records)
+      responses:
+        '204': { description: Deleted }
+        '404': { $ref: '#/components/responses/Problem' }
+  /api/projects/{id}/download:
+    parameters: [ { $ref: '#/components/parameters/Id' } ]
+    post:
+      summary: Retry a failed download
+      responses:
+        '202': { description: Restarted }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /api/projects/{id}/refresh:
+    parameters: [ { $ref: '#/components/parameters/Id' } ]
+    post:
+      summary: Pull latest code (fetch + fast-forward base branch)
+      responses:
+        '200': { description: Refreshed, content: { application/json: { schema: { $ref: '#/components/schemas/Project' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { description: Remote history rewritten (code history_rewritten) or the project is not downloaded (code conflict); local copy kept, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+  /api/projects/{id}/team:
+    parameters: [ { $ref: '#/components/parameters/Id' } ]
+    get:
+      summary: Team roster with readiness and missing-role warnings
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Team' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+  /api/projects/{id}/team/{agentId}:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+      - { name: agentId, in: path, required: true, schema: { type: string } }
+    put:
+      summary: Assign agent (409 code pm_already_assigned when adding a second PM)
+      responses:
+        '200': { description: Assigned, content: { application/json: { schema: { $ref: '#/components/schemas/Team' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+    delete:
+      summary: Remove agent from team
+      responses:
+        '200': { description: Removed, content: { application/json: { schema: { $ref: '#/components/schemas/Team' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+  /api/projects/{id}/team/replace-project-manager:
+    parameters: [ { $ref: '#/components/parameters/Id' } ]
+    post:
+      summary: Swap the current PM for another PM-role agent in one step
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [agentId], properties: { agentId: { type: string } } } } } }
+      responses:
+        '200': { description: Replaced, content: { application/json: { schema: { $ref: '#/components/schemas/Team' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+  /api/projects/{id}/finalize-team:
+    parameters: [ { $ref: '#/components/parameters/Id' } ]
+    post:
+      summary: Finish setup (422 code no_project_manager when PM missing)
+      responses:
+        '200': { description: Finalized, content: { application/json: { schema: { $ref: '#/components/schemas/Project' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+
+  # ---------- Ticket board (FR-044..050) ----------
+  /api/projects/{id}/board:
+    parameters: [ { $ref: '#/components/parameters/Id' } ]
+    get:
+      summary: The project's board, with the four columns in fixed order and their tickets in position order
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Board' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+  /api/projects/{id}/tickets:
+    parameters: [ { $ref: '#/components/parameters/Id' } ]
+    post:
+      summary: Create a ticket; it is placed at the top of New
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/TicketInput' } } } }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Ticket' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+  /api/tickets/{id}:
+    parameters: [ { $ref: '#/components/parameters/Id' } ]
+    patch:
+      summary: Edit title and/or description
+      requestBody: { required: true, content: { application/json: { schema: { type: object, minProperties: 1, additionalProperties: false, properties: { title: { type: string, minLength: 1, maxLength: 200 }, description: { type: string, maxLength: 20000 } } } } } }
+      responses:
+        '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/Ticket' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+    delete:
+      summary: Delete permanently (the UI confirms first)
+      responses:
+        '204': { description: Deleted }
+        '404': { $ref: '#/components/responses/Problem' }
+  /api/tickets/{id}/move:
+    parameters: [ { $ref: '#/components/parameters/Id' } ]
+    post:
+      summary: Move to any column and position; toIndex is clamped to the column's size
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [toStatus, toIndex]
+              additionalProperties: false
+              properties:
+                toStatus: { $ref: '#/components/schemas/TicketStatus' }
+                toIndex: { type: integer, minimum: 0 }
+      responses:
+        '200': { description: Moved; returns the updated board, content: { application/json: { schema: { $ref: '#/components/schemas/Board' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+
+  # ---------- Prices (FR-037..039) ----------
+  /api/model-prices:
+    get:
+      summary: Current prices and history (read-only; prices come from the official pages, feature 002)
+      responses: { '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/ModelPrice' } } } } } }
+
+  /api/prices/status:
+    get:
+      summary: When each provider's official pricing page was last read (feature 002)
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/PriceStatus' } } } }
+  /api/prices/refresh:
+    post:
+      summary: Read the official pricing pages now (feature 002); a request while a read runs does not start another
+      responses:
+        '202': { description: Read started, content: { application/json: { schema: { $ref: '#/components/schemas/PriceStatus' } } } }
+
+  # ---------- Audit + diagnostics (FR-041, R12) ----------
+  /api/audit-entries:
+    get:
+      summary: Audit log, newest first
+      parameters: [ { name: before, in: query, schema: { type: string } } ]
+      responses: { '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/AuditEntry' } } } } } }
+  /api/error-events:
+    get:
+      summary: Locally captured errors, newest first, at most 200 (Diagnostics page)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                maxItems: 200
+                items: { $ref: '#/components/schemas/ErrorEvent' }
+
+components:
+  securitySchemes:
+    cookieAuth: { type: apiKey, in: cookie, name: staplr_session }
+  parameters:
+    Id: { name: id, in: path, required: true, schema: { type: string } }
+  responses:
+    Problem:
+      description: Error
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+  schemas:
+    Problem:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string, description: Stable machine code, e.g. token_missing_permissions }
+        message: { type: string, description: What happened and what to do next }
+        details: { type: object, additionalProperties: true }
+    Credentials:
+      type: object
+      required: [username, password]
+      properties:
+        username: { type: string, minLength: 3, maxLength: 64 }
+        password: { type: string, minLength: 12, maxLength: 256, writeOnly: true }
+    Provider: { type: string, enum: [claude, codex] }
+    RoleType: { type: string, enum: [project_manager, business_analyst, developer, qa, custom] }
+    ReadinessReason:
+      type: object
+      required: [code]
+      properties:
+        code: { type: string, enum: [needs_relogin, no_provider_connection, model_unavailable, downloading, download_failed, repository_unavailable, base_branch_missing, source_control_needs_attention, no_project_manager, agent_not_ready] }
+        agentId: { type: string }
+        message: { type: string }
+    SourceControlConnectionCreate:
+      type: object
+      required: [name, platform, token]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 80 }
+        platform: { type: string, enum: [github, gitlab] }
+        baseUrl: { type: string, format: uri, description: GitLab self-hosted address (https only) }
+        token: { type: string, writeOnly: true }
+    SourceControlConnection:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        platform: { type: string, enum: [github, gitlab] }
+        baseUrl: { type: string }
+        accountName: { type: string }
+        grantedPermissions: { type: array, items: { type: string } }
+        missingPermissions: { type: array, items: { type: string } }
+        tokenLast4: { type: string }
+        status: { type: string, enum: [connected, needs_attention] }
+        statusReason: { type: [string, 'null'], enum: [invalid, expired, revoked, missing_permission, null] }
+        lastCheckedAt: { type: [string, 'null'], format: date-time }
+        lastCheckResult: { type: [string, 'null'] }
+    Repository:
+      type: object
+      properties:
+        remoteId: { type: string }
+        fullName: { type: string }
+        defaultBranch: { type: string }
+        private: { type: boolean }
+    ModelAccess:
+      type: object
+      additionalProperties: false
+      required: [providerConnectionId, id, label, availability, credentialRevision, catalogRevision, lastVerifiedAt, lastAttemptAt, checkError]
+      properties:
+        providerConnectionId: { type: string }
+        id: { type: string }
+        label: { type: string }
+        availability: { type: string, enum: [available, unavailable, unknown] }
+        credentialRevision: { type: integer, minimum: 1 }
+        catalogRevision: { type: string }
+        lastVerifiedAt: { type: [string, 'null'], format: date-time }
+        lastAttemptAt: { type: [string, 'null'], format: date-time }
+        checkError: { type: [string, 'null'], description: Bounded secret-free error code; no raw provider response }
+        discovered: { type: boolean, description: Listed by the provider for this login (feature 002) }
+        checking: { type: boolean, description: Discovery is running and this model has no answer yet }
+        price:
+          type: object
+          additionalProperties: false
+          required: [inputPricePerMTok, outputPricePerMTok, priceSource, pricesAsOf, label, note]
+          properties:
+            inputPricePerMTok: { type: [string, 'null'], description: USD per 1M input tokens; null = Unknown }
+            outputPricePerMTok: { type: [string, 'null'] }
+            priceSource: { type: [string, 'null'], format: uri }
+            pricesAsOf: { type: [string, 'null'], format: date }
+            label: { type: string, const: 'List price used for estimates' }
+            note: { type: [string, 'null'], description: 'For Codex: "API list price; your plan may not charge per token"' }
+    ProviderConnection:
+      type: object
+      additionalProperties: false
+      required: [id, provider, name, authType, credentialRevision, status, credentialExpiresAt, lastCheckedAt, lastCheckResult, discoveryStatus, discoveryError, modelsRefreshedAt]
+      properties:
+        id: { type: string }
+        provider: { $ref: '#/components/schemas/Provider' }
+        authType: { type: string, enum: [api_key, codex_login] }
+        credentialRevision: { type: integer, minimum: 1 }
+        name: { type: string }
+        status: { type: string, enum: [connected, needs_relogin] }
+        credentialExpiresAt: { type: [string, 'null'], format: date-time }
+        lastCheckedAt: { type: [string, 'null'], format: date-time }
+        lastCheckResult: { type: [string, 'null'] }
+        discoveryStatus: { type: string, enum: [not_started, running, finished, failed], description: Codex only; finding out which models this login can use (feature 002) }
+        discoveryError: { type: [string, 'null'], description: Short, secret-free reason when discoveryStatus is failed }
+        modelsRefreshedAt: { type: [string, 'null'], format: date-time, description: Last successful model discovery }
+    Impact:
+      type: object
+      properties:
+        agents: { type: array, items: { type: object, properties: { id: { type: string }, name: { type: string } } } }
+        projects: { type: array, items: { type: object, properties: { id: { type: string }, name: { type: string } } } }
+    SandboxSession:
+      type: object
+      properties:
+        id: { type: string }
+        provider: { type: string, const: codex }
+        status: { type: string, enum: [in_progress, succeeded, failed, cancelled, expired] }
+        failureReason: { type: [string, 'null'] }
+        terminalUrl: { type: string, description: 'WebSocket path, e.g. /api/sandbox-sessions/{id}/terminal' }
+        instructions: { type: string, description: Provider-specific steps shown beside the terminal }
+        resultConnectionId: { type: [string, 'null'] }
+        expiresAt: { type: string, format: date-time }
+    SoulInput:
+      type: object
+      required: [name, roleType, description, instructions]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 80 }
+        roleType: { $ref: '#/components/schemas/RoleType' }
+        description: { type: string, maxLength: 500 }
+        instructions: { type: string, maxLength: 20000 }
+    Soul:
+      allOf:
+        - $ref: '#/components/schemas/SoulInput'
+        - type: object
+          properties:
+            id: { type: string }
+            isDefault: { type: boolean }
+            copiedFromId: { type: [string, 'null'] }
+            usedByAgents: { type: array, items: { type: object, properties: { id: { type: string }, name: { type: string } } } }
+    AgentInput:
+      type: object
+      required: [name, soulId, provider, providerConnectionId, model]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 80 }
+        soulId: { type: string }
+        provider: { $ref: '#/components/schemas/Provider' }
+        providerConnectionId: { type: string }
+        model: { type: string }
+    Agent:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        soulId: { type: string }
+        role: { $ref: '#/components/schemas/RoleType' }
+        provider: { $ref: '#/components/schemas/Provider' }
+        providerConnectionId: { type: [string, 'null'] }
+        model: { type: string }
+        readiness: { type: string, enum: [ready, not_ready] }
+        reasons: { type: array, items: { $ref: '#/components/schemas/ReadinessReason' } }
+        projects: { type: array, items: { type: object, properties: { id: { type: string }, name: { type: string } } } }
+    Project:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        sourceControlConnectionId: { type: [string, 'null'] }
+        repoFullName: { type: string }
+        repoRemoteId: { type: string, description: The platform repository id, used to list branches and to relink }
+        baseBranch: { type: string }
+        downloadStatus: { type: string, enum: [downloading, downloaded, download_failed] }
+        downloadProgress: { type: [integer, 'null'], minimum: 0, maximum: 100 }
+        downloadError: { type: [string, 'null'] }
+        lastUpdatedAt: { type: [string, 'null'], format: date-time }
+        lastRefreshError: { type: [string, 'null'] }
+        readiness: { type: string, enum: [ready, not_ready] }
+        reasons: { type: array, items: { $ref: '#/components/schemas/ReadinessReason' } }
+    Team:
+      type: object
+      properties:
+        members: { type: array, items: { $ref: '#/components/schemas/Agent' } }
+        projectManagerId: { type: [string, 'null'] }
+        missingRoleWarnings: { type: array, items: { type: string, enum: [business_analyst, developer, qa] } }
+    TicketStatus: { type: string, enum: [new, review, testing, end] }
+    TicketInput:
+      type: object
+      required: [title]
+      additionalProperties: false
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: string, maxLength: 20000, default: '' }
+    Ticket:
+      type: object
+      required: [id, projectId, title, description, status, position, statusChangedAt]
+      properties:
+        id: { type: string }
+        projectId: { type: string }
+        title: { type: string }
+        description: { type: string }
+        status: { $ref: '#/components/schemas/TicketStatus' }
+        position: { type: integer, minimum: 0 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        statusChangedAt: { type: string, format: date-time, description: Drives "time in column" }
+    Board:
+      type: object
+      required: [projectId, columns]
+      properties:
+        projectId: { type: string }
+        columns:
+          type: array
+          minItems: 4
+          maxItems: 4
+          description: Always New, Review, Testing, End in this order
+          items:
+            type: object
+            required: [status, label, tickets]
+            properties:
+              status: { $ref: '#/components/schemas/TicketStatus' }
+              label: { type: string, enum: [New, Review, Testing, End] }
+              tickets: { type: array, items: { $ref: '#/components/schemas/Ticket' } }
+    ModelPrice:
+      type: object
+      properties:
+        id: { type: string }
+        provider: { $ref: '#/components/schemas/Provider' }
+        model: { type: string }
+        inputPricePerMTok: { type: [string, 'null'], description: null = Unknown }
+        outputPricePerMTok: { type: [string, 'null'] }
+        effectiveFrom: { type: string, format: date-time }
+        effectiveUntil: { type: [string, 'null'], format: date-time }
+        source: { type: string, enum: [default, user, official], description: official = read from the provider's pricing page (feature 002); default and user remain as history }
+        priceSource: { type: [string, 'null'], format: uri, description: Pricing page the default price was copied from }
+        pricesAsOf: { type: [string, 'null'], format: date, description: Date the default price was copied }
+        label: { type: string, const: 'List price used for estimates' }
+    PriceStatus:
+      type: object
+      required: [providers]
+      properties:
+        providers:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [provider, lastAttemptAt, lastSuccessAt, lastError]
+            properties:
+              provider: { $ref: '#/components/schemas/Provider' }
+              lastAttemptAt: { type: [string, 'null'], format: date-time }
+              lastSuccessAt: { type: [string, 'null'], format: date-time }
+              lastError: { type: [string, 'null'] }
+    ErrorEvent:
+      type: object
+      required: [id, at, requestId, route, message]
+      properties:
+        id: { type: string }
+        at: { type: string, format: date-time }
+        requestId: { type: string }
+        route: { type: string }
+        message: { type: string }
+        stack: { type: [string, 'null'], description: Stack trace with secrets redacted }
+    AuditEntry:
+      type: object
+      properties:
+        id: { type: string }
+        at: { type: string, format: date-time }
+        action: { type: string, enum: [scc.added, scc.replaced, scc.removed, provider.added, provider.replaced, provider.relogged, provider.removed, soul.created, soul.updated, soul.copied, soul.deleted, agent.created, agent.updated, agent.deleted, project.created, project.deleted, price.changed, models.discovered, prices.refreshed] }
+        targetType: { type: string }
+        targetId: { type: string }
+        targetName: { type: string }
