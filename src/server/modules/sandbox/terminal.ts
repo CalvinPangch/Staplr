@@ -84,7 +84,7 @@ export function terminalRoutes(
         if (!state) return;
         attached = true;
         const decoder = new StringDecoder('utf8');
-        state.handle.stream.on('data', (chunk: Buffer) => {
+        state.handle.onData((chunk: Buffer) => {
           const data = decoder.write(chunk);
           if (data) send({ type: 'output', data });
         });
@@ -154,7 +154,7 @@ export function terminalRoutes(
               });
               return;
             }
-            state.handle.stream.write(message.data);
+            state.handle.write(message.data);
             service.touch(id);
           } else if (message.type === 'resize') {
             await state.handle

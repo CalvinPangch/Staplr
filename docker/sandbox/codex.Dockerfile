@@ -6,6 +6,6 @@ ARG CODEX_VERSION=0.167.0
 RUN npm install -g "@openai/codex@${CODEX_VERSION}" && npm cache clean --force
 # Staplr passes -c cli_auth_credentials_store="file" on every codex command so the login is
 # the file ~/.codex/auth.json. HOME is a tmpfs at run time, so nothing is written to the image.
-ENV HOME=/home/agent CODEX_HOME=/home/agent/.codex
+ENV HOME=/home/agent
 WORKDIR /home/agent
 CMD ["sleep", "infinity"]

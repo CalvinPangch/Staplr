@@ -41,7 +41,7 @@ export function Select({
         {label}
       </label>
       <RadixSelect.Root
-        {...(value !== undefined ? { value } : {})}
+        value={value ?? ''}
         onValueChange={onValueChange}
         disabled={disabled ?? false}
       >

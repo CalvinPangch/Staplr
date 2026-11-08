@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import type { Duplex } from 'node:stream';
 import type Database from 'better-sqlite3';
 import type { Config } from '../../config.js';
 import { ServiceError } from '../../lib/problem.js';
@@ -54,7 +53,19 @@ export function createSandboxService({
 }) {
   const now = () => new Date(clock()).toISOString();
   const listeners = new Map<string, Set<(event: SessionEvent) => void>>();
-  const terminals = new Map<string, TerminalHandle>();
+  /**
+   * The login process lives as long as the session, not as long as one browser
+   * connection: a reload or reconnect must not kill `codex login` half way. Output
+   * is kept (last 64 KiB) and replayed to whoever attaches next.
+   */
+  const terminals = new Map<
+    string,
+    {
+      handle: TerminalHandle;
+      output: Buffer;
+      viewer: ((chunk: Buffer) => void) | null;
+    }
+  >();
 
   const dockerUnavailable = () =>
     new ServiceError(
@@ -119,6 +130,7 @@ export function createSandboxService({
     db.prepare(
       'UPDATE sandbox_login_session SET status=?, failureReason=?, endedAt=?, containerId=NULL, resultConnectionId=? WHERE id=?',
     ).run(status, failureReason, now(), resultConnectionId, row.id);
+    terminals.get(row.id)?.handle.stream.destroy();
     terminals.delete(row.id);
     try {
       if (driver && row.containerId) await driver.remove(row.containerId);
@@ -242,34 +254,59 @@ export function createSandboxService({
     },
 
     /** Opens the login in a TTY. One terminal at a time per session. */
-    async attach(
-      id: string,
-    ): Promise<{ stream: Duplex; resize: TerminalHandle['resize'] }> {
+    async attach(id: string): Promise<{
+      write: (data: string) => void;
+      resize: TerminalHandle['resize'];
+      onData: (listener: (chunk: Buffer) => void) => void;
+    }> {
       const row = requireOpen(id);
       if (!driver || !row.containerId) throw dockerUnavailable();
-      if (terminals.has(id))
+      let entry = terminals.get(id);
+      if (entry?.viewer)
         throw new ServiceError(
           409,
           'conflict',
           'This session already has a terminal open.',
         );
-      let handle: TerminalHandle;
-      try {
-        handle = await driver.terminal(row.containerId, profile.loginCommand);
-      } catch {
-        throw dockerUnavailable();
+      if (!entry) {
+        let handle: TerminalHandle;
+        try {
+          handle = await driver.terminal(row.containerId, profile.loginCommand);
+        } catch {
+          throw dockerUnavailable();
+        }
+        // The sandbox going away must never crash the server.
+        handle.stream.on('error', () => undefined);
+        const created = {
+          handle,
+          output: Buffer.alloc(0),
+          viewer: null as ((chunk: Buffer) => void) | null,
+        };
+        handle.stream.on('data', (chunk: Buffer) => {
+          created.output = Buffer.concat([created.output, chunk]).subarray(
+            -65536,
+          );
+          created.viewer?.(chunk);
+        });
+        terminals.set(id, created);
+        entry = created;
       }
-      // Destroying the stream (or the sandbox going away) must never crash the server.
-      handle.stream.on('error', () => undefined);
-      terminals.set(id, handle);
-      return handle;
+      const current = entry;
+      current.viewer = () => undefined; // claimed until onData installs the real listener
+      return {
+        write: (data) => void current.handle.stream.write(data),
+        resize: (cols, rows) => current.handle.resize(cols, rows),
+        onData(listener) {
+          if (current.output.length > 0) listener(current.output);
+          current.viewer = listener;
+        },
+      };
     },
 
-    /** Called when the browser's terminal closes: the next one may attach. */
+    /** The browser's terminal closed: the login keeps running and the next one may attach. */
     detach(id: string): void {
-      const handle = terminals.get(id);
-      terminals.delete(id);
-      handle?.stream.destroy();
+      const entry = terminals.get(id);
+      if (entry) entry.viewer = null;
     },
 
     subscribe(id: string, listener: (event: SessionEvent) => void): () => void {

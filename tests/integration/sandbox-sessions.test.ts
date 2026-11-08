@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { platformFixture } from './helpers';
 import {
   createFakeSandboxDriver,
@@ -26,15 +26,15 @@ const complete = (id: string) =>
 
 /** Opens the terminal as the browser would, signs in, and waits for the CLI. */
 async function signIn(id: string, line = 'OK') {
-  const { stream } = await f.app.sandbox.attach(id);
+  const terminal = await f.app.sandbox.attach(id);
   let output = '';
   const finished = new Promise<void>((resolve) => {
-    stream.on('data', (chunk: Buffer) => {
+    terminal.onData((chunk: Buffer) => {
       output += chunk.toString('utf8');
       if (output.includes('Login complete.')) resolve();
     });
   });
-  stream.write(`${line}\n`);
+  terminal.write(`${line}\n`);
   await finished;
 }
 
@@ -447,5 +447,23 @@ describe('Codex health and exact-model checks', () => {
     await f.scheduler.runAll();
     expect(await statusOf(id)).toBe('needs_relogin');
     expect(await statusOf(claude)).toBe('needs_relogin');
+  });
+});
+
+describe('a reconnecting browser', () => {
+  it('does not stop the login: the next terminal sees what was printed and can finish', async () => {
+    const id = (await start({ name: 'reconnect' })).json().id as string;
+    const first = await f.app.sandbox.attach(id);
+    let seen = '';
+    first.onData((chunk: Buffer) => (seen += chunk.toString('utf8')));
+    await vi.waitFor(() => expect(seen).toContain('STUB-1234'));
+    f.app.sandbox.detach(id); // the page reloaded
+    const second = await f.app.sandbox.attach(id);
+    let replay = '';
+    second.onData((chunk: Buffer) => (replay += chunk.toString('utf8')));
+    expect(replay).toContain('STUB-1234');
+    second.write('OK\n');
+    await vi.waitFor(() => expect(replay).toContain('Login complete.'));
+    expect((await complete(id)).statusCode).toBe(200);
   });
 });
