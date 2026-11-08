@@ -12,3 +12,6 @@ test-results/
 .claude/
 .specify/
 specs/
+
+# Pricing pages are kept exactly as the providers publish them
+tests/fixtures/pricing-*.md
