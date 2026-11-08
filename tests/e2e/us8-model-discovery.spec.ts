@@ -57,3 +57,44 @@ test('finds the models after a Codex sign-in and offers them without a manual ch
   await expect(card(page, 'Discovered').getByText('Ready')).toBeVisible();
   await axeCheck(page);
 });
+
+test('lists what was found and refreshes it on request', async ({ page }) => {
+  await signInAsOwner(page);
+  await page.goto('/settings/providers');
+  const codex = card(page, 'Discovery Codex');
+  await expect(codex.getByText('Models last refreshed:')).toBeVisible();
+  await codex.getByRole('button', { name: 'Show models' }).click();
+  const list = codex.getByRole('list', { name: 'Models for Discovery Codex' });
+  await expect(list.getByText('Stub gpt-e2e-new')).toBeVisible();
+  // the shipped catalog model the login did not list is shown as not available
+  await expect(
+    list.getByRole('listitem').filter({ hasText: 'Luna' }),
+  ).toContainText('Not available to this connection');
+  await axeCheck(page);
+
+  await codex.getByRole('button', { name: 'Refresh models' }).click();
+  await expect(page.getByRole('status')).toContainText(
+    'models refreshed, 0 changes',
+    { timeout: 60000 },
+  );
+  await expect(codex.getByText('2 models available')).toBeVisible();
+});
+
+test('shows an error with Retry when the model list cannot load', async ({
+  page,
+}) => {
+  await signInAsOwner(page);
+  await page.route('**/api/models?*', (route) =>
+    route.fulfill({
+      status: 500,
+      contentType: 'application/problem+json',
+      json: { code: 'internal', message: 'Something went wrong.' },
+    }),
+  );
+  await page.goto('/settings/providers');
+  const codex = card(page, 'Discovery Codex');
+  await codex.getByRole('button', { name: 'Show models' }).click();
+  await expect(codex.getByRole('alert')).toBeVisible();
+  await expect(codex.getByRole('button', { name: /Retry/ })).toBeVisible();
+  await axeCheck(page);
+});

@@ -94,11 +94,11 @@ models are selectable with no "Check availability" press; none shows "Not checke
 
 ### Tests for User Story 3 ⚠️
 
-- [ ] T025 [P] [US3] E2E in `tests/e2e/us8-model-discovery.spec.ts`: the connection lists available and not-available models and "last refreshed"; "Refresh models" updates them and announces how many changed; loading, empty and error states; axe
+- [X] T025 [P] [US3] E2E in `tests/e2e/us8-model-discovery.spec.ts`: the connection lists available and not-available models and "last refreshed"; "Refresh models" updates them and announces how many changed; loading, empty and error states; axe
 
 ### Implementation for User Story 3
 
-- [ ] T026 [US3] Add an expandable model list with "Refresh models" to `src/web/features/providers/ProviderCard.tsx` (Codex only), using `GET /api/models` and `POST /api/provider-connections/{id}/discover`
+- [X] T026 [US3] (Built as `src/web/features/providers/CodexModels.tsx`, used by the card) Add an expandable model list with "Refresh models" to `src/web/features/providers/ProviderCard.tsx` (Codex only), using `GET /api/models` and `POST /api/provider-connections/{id}/discover`
 
 **Checkpoint**: all discovery stories work.
 
