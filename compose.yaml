@@ -1,0 +1,32 @@
+services:
+  staplr:
+    build: .
+    environment:
+      STAPLR_MASTER_KEY: ${STAPLR_MASTER_KEY:?Set STAPLR_MASTER_KEY}
+      SESSION_SECRET: ${SESSION_SECRET:?Set SESSION_SECRET}
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:3000}
+      DOCKER_HOST: tcp://docker-proxy:2375
+      DATA_DIR: /data
+    ports: ['127.0.0.1:3000:3000']
+    volumes: [staplr-data:/data]
+    depends_on: [docker-proxy]
+  docker-proxy:
+    image: tecnativa/docker-socket-proxy:latest
+    environment:
+      CONTAINERS: 1
+      EXEC: 1
+      IMAGES: 1
+      NETWORKS: 1
+      POST: 1
+    volumes: [/var/run/docker.sock:/var/run/docker.sock:ro]
+  caddy:
+    image: caddy:2
+    profiles: [https]
+    ports: ['443:443']
+    volumes: [./docker/Caddyfile:/etc/caddy/Caddyfile:ro, caddy-data:/data]
+    environment:
+      PUBLIC_URL: ${PUBLIC_URL:-https://localhost}
+    depends_on: [staplr]
+volumes:
+  staplr-data:
+  caddy-data:

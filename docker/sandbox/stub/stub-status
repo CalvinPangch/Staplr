@@ -1,0 +1,8 @@
+#!/bin/sh
+# Exit 0 signed in, 1 no login, 2 rejected/expired/revoked, 75 transient failure.
+f="$HOME/.codex/auth.json"
+[ -f "$f" ] || exit 1
+grep -q '"transient":true' "$f" && exit 75
+[ -f "$HOME/.codex/.local-login" ] && exit 0
+grep -q '"expired":true' "$f" && exit 2
+exit 0

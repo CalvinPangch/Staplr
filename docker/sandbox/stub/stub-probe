@@ -1,0 +1,10 @@
+#!/bin/sh
+# Exact-model probe: exit 0 available, 3 the model is not available to this login,
+# otherwise the same codes as stub-status.
+stub-status || exit $?
+f="$HOME/.codex/auth.json"
+denied=$(sed -n 's/.*"denied":"\([^"]*\)".*/\1/p' "$f")
+for m in $(echo "$denied" | tr ',' ' '); do
+  [ "$m" = "$1" ] && exit 3
+done
+exit 0

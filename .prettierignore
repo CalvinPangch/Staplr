@@ -1,0 +1,17 @@
+node_modules/
+dist/
+build/
+coverage/
+package-lock.json
+.tools/
+playwright-report/
+test-results/
+
+# Spec Kit scaffolding and specification documents are not code
+.agents/
+.claude/
+.specify/
+specs/
+
+# Pricing pages are kept exactly as the providers publish them
+tests/fixtures/pricing-*.md
