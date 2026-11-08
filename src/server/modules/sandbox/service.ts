@@ -217,6 +217,7 @@ export function createSandboxService({
             expiresAt: expires,
           });
       await end(row, 'succeeded', null, connection.id);
+      void providers.startDiscovery(connection.id);
       return toPublic(requireRow(id));
     },
 

@@ -31,6 +31,8 @@ export interface FakeSandboxDriver extends SandboxDriver {
   /** simulate the provider revoking every login */
   revokeAll(): void;
   failCreate: boolean;
+  /** while set, every model probe waits for it (to observe discovery in progress) */
+  probeGate: Promise<void> | null;
 }
 
 const ok = (stdout: Buffer = Buffer.alloc(0)): ExecResult => ({
@@ -76,6 +78,7 @@ export function createFakeSandboxDriver(): FakeSandboxDriver {
     containers,
     commands,
     failCreate: false,
+    probeGate: null,
     live: () =>
       [...containers.values()].filter((c) => !c.removed).map((c) => c.id),
     revokeAll() {
@@ -162,7 +165,13 @@ export function createFakeSandboxDriver(): FakeSandboxDriver {
       if (program === 'stub-models') {
         const state = container.authJson ? parse(container.authJson) : {};
         if (state.transient) return exit(75);
-        const listed = state.models?.length ? state.models : defaultModels;
+        // models=- means the login can use no model at all
+        const listed =
+          state.models?.[0] === '-'
+            ? []
+            : state.models?.length
+              ? state.models
+              : defaultModels;
         return ok(
           Buffer.from(
             JSON.stringify({
@@ -184,6 +193,7 @@ export function createFakeSandboxDriver(): FakeSandboxDriver {
           ),
         );
       }
+      if (program === 'stub-probe' && driver.probeGate) await driver.probeGate;
       if (program === 'stub-status' || program === 'stub-probe') {
         if (!container.authJson) return exit(1);
         if (container.signedInHere) return ok();

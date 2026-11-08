@@ -162,6 +162,9 @@ describe('creating agents', () => {
   });
 
   it('refuses a Codex model until it is verified for that connection, then accepts it', async () => {
+    // hold the discovery that follows sign-in so the model is not yet verified
+    let release: () => void = () => undefined;
+    driver.probeGate = new Promise<void>((resolve) => (release = resolve));
     const connection = await codex('work codex');
     const input = {
       name: 'codex agent',
@@ -172,6 +175,9 @@ describe('creating agents', () => {
     expect(before.statusCode).toBe(422);
     expect(before.json().code).toBe('model_unavailable');
     expect(before.json().message).toMatch(/Check availability/);
+    driver.probeGate = null;
+    release();
+    await f.app.providers.whenDiscoveryIdle();
     const checked = await f.call(
       'POST',
       `/api/provider-connections/${connection}/models/gpt-6-astra/check`,
@@ -200,11 +206,15 @@ describe('creating agents', () => {
 
 describe('model candidates', () => {
   it('lists catalog candidates with availability and the catalog revision', async () => {
+    let release: () => void = () => undefined;
+    driver.probeGate = new Promise<void>((resolve) => (release = resolve));
     const connection = await codex('work codex');
     const reply = await f.call(
       'GET',
       `/api/models?providerConnectionId=${connection}`,
     );
+    driver.probeGate = null;
+    release();
     expect(reply.statusCode).toBe(200);
     const result = reply.json() as {
       catalogRevision: string;

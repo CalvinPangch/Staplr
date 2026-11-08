@@ -212,6 +212,10 @@ export function buildApp({
     sandboxRoutes(scope, sandbox);
     terminalRoutes(scope, sandbox, config);
   });
+  if (!startup.hasStartupTask('recover-model-discovery'))
+    startup.registerStartupTask('recover-model-discovery', () =>
+      providers.recoverDiscovery(),
+    );
   if (!startup.hasStartupTask('recover-sandbox-sessions'))
     startup.registerStartupTask('recover-sandbox-sessions', () =>
       sandbox.recover(),

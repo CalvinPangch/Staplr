@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useEffect, useRef, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -13,6 +13,7 @@ import { useAnnounce } from '../../components/ui/LiveRegion';
 import { StatusBadge } from '../../components/ui/StatusBadge';
 import { TextField } from '../../components/ui/TextField';
 import { formatTime } from '../source-control/api';
+import { fetchModels, modelsKey } from '../agents/api';
 import { ApiKeyDialog } from './ApiKeyDialog';
 import {
   authLabel,
@@ -102,6 +103,55 @@ function RenameDialog({
         </div>
       </form>
     </Dialog>
+  );
+}
+
+/** What model discovery found for a Codex login (feature 002). */
+function DiscoveryStatus({ connection }: { connection: ProviderConnection }) {
+  const announce = useAnnounce();
+  const status = connection.discoveryStatus;
+  const models = useQuery({
+    queryKey: [...modelsKey(connection.id), connection.modelsRefreshedAt],
+    queryFn: () => fetchModels(connection.id),
+    enabled: status === 'finished',
+  });
+  const available =
+    models.data?.models.filter((m) => m.availability === 'available').length ??
+    null;
+  let text: string | null = null;
+  if (status === 'running') text = 'Discovering models…';
+  else if (status === 'failed') text = connection.discoveryError;
+  else if (status === 'finished' && available !== null)
+    text =
+      available === 0
+        ? 'This account has no Codex models available'
+        : `${available} ${available === 1 ? 'model' : 'models'} available`;
+  const last = useRef(status);
+  useEffect(() => {
+    if (last.current === 'running' && status !== 'running' && text)
+      announce(`${connection.name}: ${text}`);
+    // wait for the model count before leaving "running", so the answer is announced
+    if (status === 'running' || text !== null) last.current = status;
+  }, [status, text, announce, connection.name]);
+  if (status === 'not_started' || !text) return null;
+  return (
+    <p
+      className={
+        status === 'failed'
+          ? 'rounded-lg border border-warning bg-warning-soft p-3 text-sm text-warning'
+          : 'text-sm'
+      }
+    >
+      {text}
+      {status === 'finished' && connection.modelsRefreshedAt && (
+        <>
+          {' · found '}
+          <time dateTime={connection.modelsRefreshedAt}>
+            {formatTime(connection.modelsRefreshedAt)}
+          </time>
+        </>
+      )}
+    </p>
   );
 }
 
@@ -226,6 +276,7 @@ export function ProviderCard({
       {connection.lastCheckResult && (
         <p className="text-sm">{connection.lastCheckResult}</p>
       )}
+      {!isClaude && <DiscoveryStatus connection={connection} />}
       {error && (
         <p
           role="alert"

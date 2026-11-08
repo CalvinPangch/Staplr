@@ -57,10 +57,13 @@ const sessionRow = (id: string) =>
     endedAt: string | null;
     resultConnectionId: string | null;
   };
+/** Model discovery after sign-in has its own tests (model-discovery.test.ts). */
 const audit = () =>
   (
     f.db
-      .prepare('SELECT action,targetName FROM audit_entry ORDER BY rowid')
+      .prepare(
+        "SELECT action,targetName FROM audit_entry WHERE action<>'models.discovered' ORDER BY rowid",
+      )
       .all() as {
       action: string;
       targetName: string;
@@ -72,6 +75,7 @@ async function connect(name: string, line = 'OK') {
   await signIn(session.id, line);
   const done = await complete(session.id);
   expect(done.statusCode).toBe(200);
+  await f.app.providers.whenDiscoveryIdle();
   return done.json().resultConnectionId as string;
 }
 
@@ -355,6 +359,12 @@ describe('Codex health and exact-model checks', () => {
 
   it('model denial changes only that pair; the probe checks exactly the model asked for', async () => {
     const id = await connect('work', 'OK denied=gpt-6-astra');
+    const probesBefore = driver.commands.filter(
+      (c) => c[0] === 'stub-probe',
+    ).length;
+    const solBefore = f.app.providers
+      .listModelAccess(id)
+      .find((m) => m.id === 'gpt-6.1-sol');
     const denied = await f.call(
       'POST',
       `/api/provider-connections/${id}/models/gpt-6-astra/check`,
@@ -375,15 +385,13 @@ describe('Codex health and exact-model checks', () => {
     expect((await connections())[0]?.status).toBe('connected');
     const probes = driver.commands
       .filter((c) => c[0] === 'stub-probe')
+      .slice(probesBefore)
       .map((c) => c[1]);
     expect(probes).toEqual(['gpt-6-astra', 'gpt-6-luna']);
-    const unchecked = f.app.providers
+    const untouched = f.app.providers
       .listModelAccess(id)
       .find((m) => m.id === 'gpt-6.1-sol');
-    expect(unchecked).toMatchObject({
-      availability: 'unknown',
-      lastVerifiedAt: null,
-    });
+    expect(untouched).toEqual(solBefore);
   });
 
   it('a transient failure keeps the confirmed status and evidence and explains the retry', async () => {

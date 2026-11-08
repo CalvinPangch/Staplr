@@ -54,6 +54,7 @@ export function createAgentService({
   ): Agent {
     let connection: { status: 'connected' | 'needs_relogin' } | null = null;
     let availability: 'available' | 'unavailable' | 'unknown' = 'unknown';
+    let discoveredLabel: string | null = null;
     if (row.providerConnectionId) {
       try {
         connection = providers.get(row.providerConnectionId);
@@ -62,15 +63,20 @@ export function createAgentService({
           access = providers.listModelAccess(row.providerConnectionId);
           cache.set(row.providerConnectionId, access);
         }
-        availability =
-          access.find((m) => m.id === row.model)?.availability ?? 'unknown';
+        const listed = access.find((m) => m.id === row.model);
+        availability = listed?.availability ?? 'unknown';
+        if (listed?.discovered) discoveredLabel = listed.label;
       } catch {
         connection = null;
       }
     }
-    const entry = loadCatalog().models.find(
-      (m) => m.provider === row.provider && m.id === row.model,
-    );
+    const entry =
+      loadCatalog().models.find(
+        (m) => m.provider === row.provider && m.id === row.model,
+      ) ??
+      (discoveredLabel
+        ? { label: discoveredLabel, retired: false }
+        : undefined);
     const { readiness, reasons } = agentReadiness({
       connection,
       model: entry
@@ -140,18 +146,22 @@ export function createAgentService({
         'invalid_input',
         `The provider must match the connection: ${connection.name} is a ${connection.provider} connection.`,
       );
-    const entry = loadCatalog().models.find(
-      (m) => m.provider === input.provider && m.id === input.model,
-    );
+    const access = providers
+      .listModelAccess(input.providerConnectionId)
+      .find((m) => m.id === input.model);
+    const entry =
+      loadCatalog().models.find(
+        (m) => m.provider === input.provider && m.id === input.model,
+      ) ??
+      (access?.discovered
+        ? { label: access.label, retired: false }
+        : undefined);
     if (!entry || entry.retired)
       throw new ServiceError(
         422,
         'model_unavailable',
         'That model is not offered. Choose another model.',
       );
-    const access = providers
-      .listModelAccess(input.providerConnectionId)
-      .find((m) => m.id === input.model);
     if (access?.availability === 'unavailable')
       throw new ServiceError(
         422,

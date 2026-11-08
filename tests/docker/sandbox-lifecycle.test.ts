@@ -86,6 +86,7 @@ describe('sandbox login in real containers (stub image)', () => {
     expect(done.statusCode).toBe(200);
     expect(done.json().status).toBe('succeeded');
     t.socket.close();
+    await f.app.providers.whenDiscoveryIdle();
     expect(await labeled()).toBe(0);
 
     // The stored login is restored into a fresh container and checked there.
@@ -97,6 +98,7 @@ describe('sandbox login in real containers (stub image)', () => {
     expect(checked.statusCode).toBe(200);
     expect(checked.json().status).toBe('connected');
     expect(JSON.stringify(checked.json())).not.toContain('stub-secret');
+    await f.app.providers.whenDiscoveryIdle();
     expect(await labeled()).toBe(0);
   });
 
@@ -133,6 +135,7 @@ describe('sandbox login in real containers (stub image)', () => {
     expect(
       (await f.call('DELETE', `/api/sandbox-sessions/${id}`)).statusCode,
     ).toBe(204);
+    await f.app.providers.whenDiscoveryIdle();
     expect(await labeled()).toBe(0);
     expect(
       (await f.call('GET', '/api/provider-connections')).json(),
@@ -155,6 +158,7 @@ describe('sandbox login in real containers (stub image)', () => {
     await Promise.all(
       ids.map((id) => f.call('DELETE', `/api/sandbox-sessions/${id}`)),
     );
+    await f.app.providers.whenDiscoveryIdle();
     expect(await labeled()).toBe(0);
   });
 
@@ -169,6 +173,7 @@ describe('sandbox login in real containers (stub image)', () => {
     expect(
       (await f.call('GET', `/api/sandbox-sessions/${id}`)).json().status,
     ).toBe('expired');
+    await f.app.providers.whenDiscoveryIdle();
     expect(await labeled()).toBe(0);
   });
 });

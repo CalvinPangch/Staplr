@@ -128,6 +128,8 @@ export async function platformFixture(
       f.scheduler.stop();
       // background downloads must finish before their folders disappear
       await f.app.projects?.whenIdle?.();
+      // model discovery after a Codex sign-in must settle before the database closes
+      await f.app.providers?.whenDiscoveryIdle?.();
       await f.app.close();
       f.db.close();
       await fake.close();

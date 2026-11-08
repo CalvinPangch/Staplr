@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   useQuery,
   useQueryClient,
@@ -24,9 +24,11 @@ import {
   agentsKey,
   availabilityText,
   fetchModels,
+  modelStatusText,
   modelsKey,
   useAgents,
 } from '../../features/agents/api';
+import { discoveryPollMs } from '../../features/providers/api';
 import {
   providerName,
   useProviderConnections,
@@ -99,8 +101,8 @@ function ModelList({
             <div className="flex flex-col text-sm">
               <span className="font-medium">{model.label}</span>
               <span className="text-muted">
-                {availabilityText[model.availability]}
-                {model.lastVerifiedAt && (
+                {modelStatusText(model)}
+                {model.lastVerifiedAt && !model.checking && (
                   <>
                     {' · verified '}
                     <time dateTime={model.lastVerifiedAt}>
@@ -155,7 +157,19 @@ function Editor({ agent }: { agent: Agent | null }) {
     queryFn: () => fetchModels(connectionId),
     enabled: connectionId !== '',
     staleTime: 0,
+    refetchInterval: (query) =>
+      query.state.data?.discoveryStatus === 'running' ? discoveryPollMs : false,
   });
+  // Tell screen-reader users when discovery answers, without a reload.
+  const discovery = candidates.data?.discoveryStatus;
+  const lastDiscovery = useRef(discovery);
+  useEffect(() => {
+    if (lastDiscovery.current === 'running' && discovery === 'finished')
+      announce('Models for this connection are ready to choose.');
+    else if (lastDiscovery.current === 'running' && discovery === 'failed')
+      announce('Finding models for this connection did not finish.');
+    lastDiscovery.current = discovery;
+  }, [discovery, announce]);
 
   const connectionOptions = (connections.data ?? [])
     .filter((c) => c.provider === provider)
@@ -171,10 +185,10 @@ function Editor({ agent }: { agent: Agent | null }) {
   const modelOptions = (candidates.data?.models ?? []).map((m) => ({
     value: m.id,
     label:
-      m.availability === 'available'
+      m.availability === 'available' && !m.checking
         ? m.label
-        : `${m.label} (${availabilityText[m.availability].toLowerCase()})`,
-    disabled: m.availability !== 'available',
+        : `${m.label} (${modelStatusText(m).toLowerCase()})`,
+    disabled: m.availability !== 'available' || m.checking === true,
   }));
   const savedModelMissing =
     model !== '' &&

@@ -7,8 +7,18 @@ export const providersKey = ['provider-connections'] as const;
 export const fetchProviders = () =>
   api<ProviderConnection[]>('/api/provider-connections');
 
+/** While a Codex login is discovering its models, the list refreshes every 2 s. */
+export const discoveryPollMs = 2000;
+
 export function useProviderConnections() {
-  return useQuery({ queryKey: providersKey, queryFn: fetchProviders });
+  return useQuery({
+    queryKey: providersKey,
+    queryFn: fetchProviders,
+    refetchInterval: (query) =>
+      query.state.data?.some((c) => c.discoveryStatus === 'running')
+        ? discoveryPollMs
+        : false,
+  });
 }
 
 export interface ImpactItem {

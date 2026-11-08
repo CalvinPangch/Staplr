@@ -209,7 +209,7 @@ export function ProviderLoginPage() {
                     : finished.status === 'cancelled'
                       ? 'This sign-in session was cancelled. Nothing was saved.'
                       : finished.status === 'succeeded'
-                        ? 'This sign-in session finished and the login was saved.'
+                        ? 'This sign-in session finished and the login was saved. Staplr is now finding which models it can use; the Providers screen shows the result.'
                         : (finished.reason ??
                           'This sign-in session ended. Nothing was saved.')}
                 </p>
@@ -252,6 +252,11 @@ export function ProviderLoginPage() {
                     {socketNote}
                   </p>
                 )}
+                <p className="text-sm">
+                  After you sign in, Staplr finds which models this login can
+                  use. Finding your models sends one very short request per
+                  model (about 10).
+                </p>
                 <div className="flex flex-wrap gap-2">
                   <Button
                     variant="primary"

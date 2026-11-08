@@ -12,6 +12,8 @@ export function useAgents() {
 
 export interface ModelCandidates {
   catalogRevision: string;
+  discoveryStatus?: 'not_started' | 'running' | 'finished' | 'failed';
+  modelsRefreshedAt?: string | null;
   models: ModelAccess[];
 }
 export const modelsKey = (connectionId: string) =>
@@ -26,3 +28,7 @@ export const availabilityText = {
   unavailable: 'Not available to this connection',
   unknown: 'Not checked yet',
 } as const;
+
+/** "Checking…" while model discovery has not answered for this model yet. */
+export const modelStatusText = (model: ModelAccess) =>
+  model.checking ? 'Checking…' : availabilityText[model.availability];

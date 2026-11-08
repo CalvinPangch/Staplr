@@ -86,7 +86,7 @@ tests/
 ├── integration/official-prices.test.ts
 ├── contract/discovery-prices.contract.test.ts
 ├── docker/model-discovery.test.ts
-└── e2e/us2-model-discovery.spec.ts      # replaces us6-model-prices.spec.ts
+└── e2e/us8-model-discovery.spec.ts      # replaces us6-model-prices.spec.ts
 ```
 
 **Structure Decision**: same web-application layout as feature 001; changes stay inside the

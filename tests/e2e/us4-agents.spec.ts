@@ -46,7 +46,7 @@ async function addClaudeConnection(page: Page, name: string) {
   ).toBeVisible();
 }
 
-async function addCodexConnection(page: Page, name: string) {
+async function addCodexConnection(page: Page, name: string, line = 'OK') {
   await page.goto('/settings/providers');
   await page.getByRole('button', { name: 'Add Codex' }).click();
   const dialog = page.getByRole('dialog', { name: 'Add a Codex connection' });
@@ -57,7 +57,7 @@ async function addCodexConnection(page: Page, name: string) {
     timeout: 30000,
   });
   await page.locator('.xterm').click();
-  await page.keyboard.type('OK');
+  await page.keyboard.type(line);
   await page.keyboard.press('Enter');
   await expect(page.locator('.xterm-rows')).toContainText('Login complete.');
   await page.getByRole('button', { name: 'I’ve finished logging in' }).click();
@@ -128,7 +128,14 @@ test('creates a Codex agent only after its model is checked', async ({
   page,
 }) => {
   await signInAsOwner(page);
-  await addCodexConnection(page, 'Agents Codex');
+  // The login lists no models, so discovery marks Astra unavailable and only a
+  // manual check of that exact model can make it available.
+  await addCodexConnection(page, 'Agents Codex', 'OK models=-');
+  await expect(
+    card(page, 'Agents Codex').getByText(
+      'This account has no Codex models available',
+    ),
+  ).toBeVisible({ timeout: 60000 });
   await page.goto('/agents/new');
   await page.getByLabel('Name').fill('Bob');
   await choose(page, 'Soul', /QA \(QA\)/);
@@ -143,9 +150,12 @@ test('creates a Codex agent only after its model is checked', async ({
   await page
     .getByRole('button', { name: 'Check availability for Astra' })
     .click();
-  await expect(page.getByText('Available').first()).toBeVisible({
-    timeout: 30000,
-  });
+  await expect(
+    page
+      .getByRole('region', { name: 'Models for this connection' })
+      .getByText(/^Available/)
+      .first(),
+  ).toBeVisible({ timeout: 30000 });
   await choose(page, 'Model', 'Astra');
   await page.getByRole('button', { name: 'Create agent' }).click();
   await expect(page).toHaveURL(/\/agents$/);

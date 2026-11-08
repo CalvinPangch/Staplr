@@ -55,8 +55,11 @@ export function priceRoutes(
         'Choose a provider connection to list its models.',
       );
     try {
+      const connection = providers.get(query.data.providerConnectionId);
       return {
         catalogRevision: catalogRevision(),
+        discoveryStatus: connection.discoveryStatus,
+        modelsRefreshedAt: connection.modelsRefreshedAt,
         models: providers.listModelAccess(query.data.providerConnectionId),
       };
     } catch (error) {

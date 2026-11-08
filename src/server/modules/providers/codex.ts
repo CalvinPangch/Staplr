@@ -3,6 +3,7 @@ import {
   authFile,
   sandboxHome,
   type CodexProfile,
+  type DiscoveredModel,
   type ProbeVerdict,
 } from '../sandbox/profiles.js';
 import { bundleFromAuthFile, extractAuthFile } from './credential-bundle.js';
@@ -17,9 +18,54 @@ export interface CodexVerifyResult {
   refreshedBundle: Buffer | null;
 }
 
+export interface CodexDiscoveryResult {
+  /** rejected: Codex no longer accepts the login. unavailable: nothing is known. */
+  auth: 'ok' | 'rejected' | 'unavailable';
+  /** null when the list could not be read; then no model may change state */
+  models: (DiscoveredModel & { verdict: ProbeVerdict })[] | null;
+  expiresAt: string | null;
+  refreshedBundle: Buffer | null;
+}
+
 export interface CodexExecutor {
   verify(bundle: Buffer, models: string[]): Promise<CodexVerifyResult>;
+  /**
+   * Lists the models this login can see and, unless listOnly, checks each one with a
+   * minimal request (feature 002). listOnly is the hourly refresh, which costs no allowance.
+   */
+  discover(
+    bundle: Buffer,
+    options?: {
+      listOnly?: boolean;
+      onModel?: (id: string, verdict: ProbeVerdict) => void;
+    },
+  ): Promise<CodexDiscoveryResult>;
 }
+
+/** Runs at most `limit` tasks at once; results keep the input order. */
+export async function mapLimit<T, R>(
+  items: T[],
+  limit: number,
+  run: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  const workers = Array.from(
+    { length: Math.min(limit, items.length) },
+    async () => {
+      while (next < items.length) {
+        const index = next++;
+        results[index] = await run(items[index] as T);
+      }
+    },
+  );
+  await Promise.all(workers);
+  return results;
+}
+
+/** At most two model checks at a time, so discovery stays light on the account. */
+const probeConcurrency = 2;
+const probeTimeoutMs = 120_000;
 
 const unknown: CodexVerifyResult = {
   auth: 'unavailable',
@@ -54,6 +100,67 @@ export function createCodexExecutor(
   profile: CodexProfile,
 ): CodexExecutor {
   return {
+    async discover(bundle, options = {}) {
+      const failed: CodexDiscoveryResult = {
+        auth: 'unavailable',
+        models: null,
+        expiresAt: null,
+        refreshedBundle: null,
+      };
+      const original = extractAuthFile(bundle);
+      if (!original) return { ...failed, auth: 'rejected' };
+      const id = await driver.create();
+      try {
+        const restore = await driver.exec(
+          id,
+          ['tar', '-x', '-C', sandboxHome],
+          {
+            stdin: bundleFromAuthFile(original),
+          },
+        );
+        if (restore.exitCode !== 0) return failed;
+        const status = profile.classifyStatus(
+          await driver.exec(id, profile.statusCommand),
+        );
+        if (status !== 'ok') return { ...failed, auth: status };
+        const listing = await driver.exec(id, profile.listCommand, {
+          timeoutMs: probeTimeoutMs,
+        });
+        const listed =
+          listing.exitCode === 0 && !listing.timedOut
+            ? profile.parseModelList(listing.stdout)
+            : null;
+        if (!listed) return { ...failed, auth: 'ok' };
+        let rejected = false;
+        const models = await mapLimit(
+          listed,
+          probeConcurrency,
+          async (model) => {
+            if (options.listOnly || rejected)
+              return { ...model, verdict: 'unavailable' as ProbeVerdict };
+            const verdict = profile.classifyProbe(
+              await driver.exec(id, profile.probeCommand(model.id), {
+                timeoutMs: probeTimeoutMs,
+              }),
+            );
+            if (verdict === 'rejected') rejected = true;
+            else options.onModel?.(model.id, verdict);
+            return { ...model, verdict };
+          },
+        );
+        if (rejected) return { ...failed, auth: 'rejected' };
+        const after = await readAuthFile(driver, id);
+        const changed = after !== null && !after.equals(original);
+        return {
+          auth: 'ok',
+          models,
+          expiresAt: profile.readExpiry((after ?? original).toString('utf8')),
+          refreshedBundle: changed ? bundleFromAuthFile(after) : null,
+        };
+      } finally {
+        await driver.remove(id).catch(() => undefined);
+      }
+    },
     async verify(bundle, models) {
       const original = extractAuthFile(bundle);
       if (!original) return { ...unknown, auth: 'rejected' };

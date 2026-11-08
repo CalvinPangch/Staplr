@@ -9,6 +9,7 @@ if [ -f "$f" ]; then
   list=$(sed -n 's/.*"models":"\([^"]*\)".*/\1/p' "$f")
 fi
 [ -z "$list" ] && list="gpt-6-astra,gpt-6.1-sol,gpt-6.1-terra,gpt-6-luna"
+[ "$list" = "-" ] && list=""
 printf '{"models":['
 for m in $(echo "$list" | tr ',' ' '); do
   printf '{"slug":"%s","display_name":"Stub %s","visibility":"list","supported_in_api":true},' "$m" "$m"

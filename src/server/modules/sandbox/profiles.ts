@@ -20,11 +20,60 @@ export interface CodexProfile {
   loginCommand: string[];
   statusCommand: string[];
   probeCommand(model: string): string[];
+  /** Prints the model catalog this login can see, as JSON (feature 002). */
+  listCommand: string[];
+  /** The listed models, or null when the output is not a model list. */
+  parseModelList(stdout: Buffer): DiscoveredModel[] | null;
   classifyStatus(result: ExecResult): StatusVerdict;
   classifyProbe(result: ExecResult): ProbeVerdict;
   /** Reads the credential's expiry from auth.json when the format is known. */
   readExpiry(authJson: string): string | null;
   instructions: string;
+}
+
+export interface DiscoveredModel {
+  id: string;
+  label: string;
+}
+
+/**
+ * Reads `codex debug models` output: `{ models: [{ slug, display_name, visibility }] }`.
+ * Only entries with visibility "list" are offered; ids must be 1-200 characters and labels
+ * 1-120 (a missing label falls back to the id).
+ */
+export function parseModelList(stdout: Buffer): DiscoveredModel[] | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout.toString('utf8'));
+  } catch {
+    return null;
+  }
+  if (
+    typeof parsed !== 'object' ||
+    parsed === null ||
+    !('models' in parsed) ||
+    !Array.isArray(parsed.models)
+  )
+    return null;
+  const models: DiscoveredModel[] = [];
+  for (const entry of parsed.models as unknown[]) {
+    if (typeof entry !== 'object' || entry === null) continue;
+    const {
+      slug,
+      display_name: name,
+      visibility,
+    } = entry as {
+      slug?: unknown;
+      display_name?: unknown;
+      visibility?: unknown;
+    };
+    if (visibility !== 'list' || typeof slug !== 'string') continue;
+    if (slug.length < 1 || slug.length > 200) continue;
+    const label = typeof name === 'string' && name.length > 0 ? name : slug;
+    if (label.length > 120) continue;
+    models.push({ id: slug, label });
+  }
+  return models;
 }
 
 const instructions =
@@ -37,6 +86,8 @@ export function stubProfile(image: string): CodexProfile {
     loginCommand: ['stub-login'],
     statusCommand: ['stub-status'],
     probeCommand: (model) => ['stub-probe', model],
+    listCommand: ['stub-models'],
+    parseModelList,
     classifyStatus: (r) =>
       r.timedOut
         ? 'unavailable'
@@ -81,9 +132,13 @@ export function realProfile(image: string): CodexProfile {
     image,
     loginCommand: ['codex', 'login', ...fileStore, '--device-auth'],
     statusCommand: ['codex', 'login', ...fileStore, 'status'],
+    listCommand: ['codex', ...fileStore, 'debug', 'models'],
+    parseModelList,
     probeCommand: (model) => [
       'codex',
       ...fileStore,
+      '-c',
+      'model_reasoning_effort="low"',
       'exec',
       '--model',
       model,

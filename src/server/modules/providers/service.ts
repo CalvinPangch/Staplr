@@ -10,9 +10,13 @@ import type {
   ProviderConnection,
 } from '../../../shared/schemas/providers.js';
 import { recordAudit } from '../audit/service.js';
-import { catalogRevision, listModels } from '../prices/catalog.js';
+import { catalogRevision, listModels, loadCatalog } from '../prices/catalog.js';
 import { listAnthropicModels, type ModelList } from './anthropic.js';
-import type { CodexExecutor, CodexVerifyResult } from './codex.js';
+import type {
+  CodexDiscoveryResult,
+  CodexExecutor,
+  CodexVerifyResult,
+} from './codex.js';
 import type { ProbeVerdict } from '../sandbox/profiles.js';
 import type { Impact, ImpactRegistry } from './impact.js';
 
@@ -43,6 +47,12 @@ const messages = {
   codexUnavailable:
     'Could not run the Codex check right now. It will be checked again.',
   noDocker: 'Docker is not available, so this login could not be checked.',
+  listUnreadable:
+    'Could not read the model list from Codex. Use Refresh models to try again.',
+  discoveryUnavailable:
+    'Could not reach Codex to find your models. Use Refresh models to try again.',
+  discoveryNoDocker:
+    'Docker is not available, so your models could not be found. Start Docker, then use Refresh models.',
   unavailable:
     'Could not reach Anthropic to check this API key. It will be checked again.',
 };
@@ -321,7 +331,143 @@ export function createProviderService({
     else await checkCodex(row);
   }
 
-  /** Evidence for every selectable catalog model, with stale results unknown. */
+  /** Discovery runs in progress, with the models answered so far in each run. */
+  const discoveries = new Map<
+    string,
+    { done: Promise<void>; answered: Set<string> }
+  >();
+
+  function setDiscovery(
+    id: string,
+    status: DiscoveryStatus,
+    error: string | null,
+    refreshedAt?: string,
+  ) {
+    db.prepare(
+      'UPDATE provider_connection SET discoveryStatus=?, discoveryError=?, modelsRefreshedAt=COALESCE(?, modelsRefreshedAt) WHERE id=?',
+    ).run(status, error, refreshedAt ?? null, id);
+  }
+
+  /**
+   * Lists the models a Codex login can see and checks each one (feature 002).
+   * The answer is stored only if the login was not replaced meanwhile.
+   */
+  async function runDiscovery(
+    row: Row,
+    answered: Set<string>,
+    listOnly: boolean,
+  ) {
+    if (!row.credentialBundleSealed) return;
+    if (!codex) {
+      setDiscovery(row.id, 'failed', messages.discoveryNoDocker);
+      return;
+    }
+    const bundle = openBlob(row.credentialBundleSealed, config.masterKey);
+    const stillCurrent = () =>
+      find(row.id)?.credentialRevision === row.credentialRevision;
+    let result: CodexDiscoveryResult;
+    try {
+      result = await codex.discover(bundle, {
+        listOnly,
+        onModel: (model, verdict) => {
+          if (!stillCurrent()) return;
+          writeVerdict(row, model, verdict, now());
+          answered.add(model);
+        },
+      });
+    } catch {
+      result = {
+        auth: 'unavailable',
+        models: null,
+        expiresAt: null,
+        refreshedBundle: null,
+      };
+    }
+    const at = now();
+    db.transaction(() => {
+      if (!stillCurrent()) return;
+      if (result.auth === 'rejected') {
+        db.prepare(
+          "UPDATE provider_connection SET status='needs_relogin', lastCheckedAt=?, lastCheckResult=?, updatedAt=? WHERE id=?",
+        ).run(at, messages.codexRejected, at, row.id);
+        setDiscovery(row.id, 'failed', messages.codexRejected);
+        return;
+      }
+      if (result.auth === 'unavailable' || !result.models) {
+        setDiscovery(
+          row.id,
+          'failed',
+          result.auth === 'ok'
+            ? messages.listUnreadable
+            : messages.discoveryUnavailable,
+        );
+        return;
+      }
+      db.prepare(
+        "UPDATE provider_connection SET status='connected', credentialExpiresAt=COALESCE(?, credentialExpiresAt), updatedAt=? WHERE id=?",
+      ).run(result.expiresAt, at, row.id);
+      if (result.refreshedBundle)
+        db.prepare(
+          'UPDATE provider_connection SET credentialBundleSealed=? WHERE id=? AND credentialRevision=?',
+        ).run(
+          sealToBlob(result.refreshedBundle, config.masterKey),
+          row.id,
+          row.credentialRevision,
+        );
+      db.prepare(
+        'DELETE FROM discovered_model WHERE providerConnectionId=?',
+      ).run(row.id);
+      const insert = db.prepare(
+        'INSERT INTO discovered_model(providerConnectionId,model,label,listedAt) VALUES(?,?,?,?)',
+      );
+      const listed = new Set<string>();
+      for (const model of result.models) {
+        if (listed.has(model.id)) continue;
+        listed.add(model.id);
+        insert.run(row.id, model.id, model.label, at);
+        // The hourly re-list costs nothing and so cannot confirm access.
+        if (!listOnly) writeVerdict(row, model.id, model.verdict, at);
+      }
+      // A model the login does not list is known to be out of reach.
+      for (const model of listModels(row.provider))
+        if (!listed.has(model.id)) writeVerdict(row, model.id, 'denied', at);
+      setDiscovery(row.id, 'finished', null, at);
+      recordAudit(db, {
+        action: 'models.discovered',
+        targetType: 'provider_connection',
+        targetId: row.id,
+        targetName: row.name,
+        detail: {
+          listed: listed.size,
+          available: result.models.filter((m) => m.verdict === 'available')
+            .length,
+        },
+        at,
+      });
+    })();
+  }
+
+  /** Starts discovery unless it is already running; a second request joins the first. */
+  function startDiscovery(
+    id: string,
+    options: { listOnly?: boolean } = {},
+  ): Promise<void> {
+    const running = discoveries.get(id);
+    if (running) return running.done;
+    const row = find(id);
+    if (!row || row.authType !== 'codex_login') return Promise.resolve();
+    setDiscovery(id, 'running', null);
+    const answered = new Set<string>();
+    const done = runDiscovery(row, answered, options.listOnly ?? false)
+      .catch(() => {
+        if (find(id)) setDiscovery(id, 'failed', messages.discoveryUnavailable);
+      })
+      .finally(() => discoveries.delete(id));
+    discoveries.set(id, { done, answered });
+    return done;
+  }
+
+  /** Evidence for every selectable model, with stale results unknown. */
   function listModelAccess(id: string): ModelAccess[] {
     const row = requireRow(id);
     const revision = catalogRevision();
@@ -340,7 +486,28 @@ export function createProviderService({
         }[]
       ).map((r) => [r.model, r]),
     );
-    return listModels(row.provider).map((model) => {
+    const discovered = new Map(
+      (
+        db
+          .prepare(
+            'SELECT model, label FROM discovered_model WHERE providerConnectionId=? ORDER BY label COLLATE NOCASE',
+          )
+          .all(id) as { model: string; label: string }[]
+      ).map((r) => [r.model, r.label]),
+    );
+    const catalogIds = new Set(
+      loadCatalog()
+        .models.filter((m) => m.provider === row.provider)
+        .map((m) => m.id),
+    );
+    const offered = [
+      ...listModels(row.provider).map((m) => ({ id: m.id, label: m.label })),
+      ...[...discovered]
+        .filter(([model]) => !catalogIds.has(model))
+        .map(([model, label]) => ({ id: model, label })),
+    ];
+    const run = discoveries.get(id);
+    return offered.map((model) => {
       const evidence = stored.get(model.id);
       const current =
         evidence !== undefined &&
@@ -356,6 +523,8 @@ export function createProviderService({
         lastVerifiedAt: current ? evidence.lastVerifiedAt : null,
         lastAttemptAt: evidence?.lastAttemptAt ?? null,
         checkError: current ? evidence.checkError : null,
+        discovered: discovered.has(model.id),
+        checking: run !== undefined && !run.answered.has(model.id),
       };
     });
   }
@@ -376,6 +545,28 @@ export function createProviderService({
     },
 
     listModelAccess,
+    startDiscovery,
+
+    /** Resolves when no discovery is running (tests and shutdown). */
+    async whenDiscoveryIdle(): Promise<void> {
+      while (discoveries.size > 0)
+        await Promise.all([...discoveries.values()].map((d) => d.done));
+    },
+
+    /** After a restart, a discovery cut short is started again. */
+    async recoverDiscovery(): Promise<void> {
+      const ids = (
+        db
+          .prepare(
+            "SELECT id FROM provider_connection WHERE discoveryStatus='running'",
+          )
+          .all() as { id: string }[]
+      ).map((r) => r.id);
+      for (const id of ids) {
+        setDiscovery(id, 'not_started', null);
+        void startDiscovery(id);
+      }
+    },
 
     async createClaude(input: ClaudeCreate): Promise<ProviderConnection> {
       assertNameFree('claude', input.name);
