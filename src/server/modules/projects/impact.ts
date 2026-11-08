@@ -45,8 +45,7 @@ export function registerProjectImpact({
       .prepare(
         `SELECT p.id, p.name,
            (SELECT COUNT(*) FROM team_assignment t JOIN agent a ON a.id = t.agentId
-              JOIN soul s ON s.id = a.soulId
-              WHERE t.projectId = p.id AND s.roleType = 'project_manager') AS managers
+              WHERE t.projectId = p.id AND a.role = 'project_manager') AS managers
          FROM project p JOIN team_assignment ta ON ta.projectId = p.id
          WHERE ta.agentId=? AND p.deletedAt IS NULL ORDER BY p.name`,
       )

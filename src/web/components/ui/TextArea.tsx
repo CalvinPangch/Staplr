@@ -33,7 +33,7 @@ export function TextArea({
     .join(' ');
   return (
     <div className="flex flex-col gap-1">
-      <label htmlFor={areaId} className="text-sm font-medium">
+      <label htmlFor={areaId} className="text-secondary font-medium">
         {label}
       </label>
       <textarea
@@ -43,22 +43,25 @@ export function TextArea({
         aria-invalid={error ? true : undefined}
         aria-describedby={describedBy}
         className={cn(
-          'min-h-28 rounded-lg border bg-bg px-3 py-2 text-fg',
-          error ? 'border-danger' : 'border-edge',
+          'min-h-28 rounded-control border bg-surface px-3 py-2 text-fg',
+          error ? 'border-status-failed' : 'border-control',
           className,
         )}
         {...rest}
       />
       {hint && (
-        <p id={hintId} className="text-sm text-muted">
+        <p id={hintId} className="text-secondary text-muted">
           {hint}
         </p>
       )}
-      <p id={countId} className="text-sm text-muted">
+      <p id={countId} className="text-secondary text-muted">
         {value.length} of {maxLength} characters
       </p>
       {error && (
-        <p id={errorId} className="text-sm font-medium text-danger">
+        <p
+          id={errorId}
+          className="text-secondary font-medium text-status-failed"
+        >
           {error}
         </p>
       )}

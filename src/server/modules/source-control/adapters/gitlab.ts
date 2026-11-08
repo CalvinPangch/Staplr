@@ -131,7 +131,9 @@ export function createGitlabAdapter(baseUrl: string): PlatformAdapter {
         const status = statusOf(error);
         if (status === 401 || status === 403)
           return { ok: false, failure: 'invalid' };
-        return { ok: false, failure: 'unavailable' };
+        return status === undefined
+          ? { ok: false, failure: 'unavailable' }
+          : { ok: false, failure: 'unavailable', status };
       }
     },
   };

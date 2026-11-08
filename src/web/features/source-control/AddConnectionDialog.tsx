@@ -58,7 +58,7 @@ export function AddConnectionDialog({
       {serverError && (
         <p
           role="alert"
-          className="rounded-lg border border-danger bg-danger-soft p-3 text-danger"
+          className="rounded-card border border-status-failed bg-status-failed-soft p-4 text-status-failed"
         >
           {serverError}
         </p>

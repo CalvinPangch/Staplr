@@ -9,9 +9,9 @@ export interface DialogProps {
   children: ReactNode;
 }
 
-const overlay = 'fixed inset-0 z-40 bg-black/50';
+const overlay = 'fixed inset-0 z-40 bg-black/40';
 export const dialogContent =
-  'fixed left-1/2 top-1/2 z-50 max-h-[90vh] w-[min(32rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl border border-edge-soft bg-bg p-6 text-fg shadow-xl';
+  'fixed left-1/2 top-1/2 z-50 max-h-[90vh] w-[min(32rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-card border border-separator bg-surface p-6 text-fg shadow-card';
 
 export function Dialog({
   open,
@@ -28,7 +28,7 @@ export function Dialog({
           className={dialogContent}
           {...(description ? {} : { 'aria-describedby': undefined })}
         >
-          <RadixDialog.Title className="text-lg font-semibold">
+          <RadixDialog.Title className="text-section font-semibold">
             {title}
           </RadixDialog.Title>
           {description && (

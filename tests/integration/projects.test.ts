@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { simpleGit } from 'simple-git';
 import { platformFixture } from './helpers';
 import { createGitRemote, type GitRemote } from '../fakes/git-remote';
+import { agentBody } from './agent-helpers';
 
 let f: Awaited<ReturnType<typeof platformFixture>>;
 let remote: GitRemote;
@@ -414,22 +415,18 @@ describe('provider impact', () => {
         apiKey: 'sk-ant-projects-1',
       })
     ).json().id as string;
-    const souls = (await f.call('GET', '/api/souls')).json() as {
-      id: string;
-      roleType: string;
-      isDefault: boolean;
-    }[];
-    const soulId = souls.find(
-      (s) => s.isDefault && s.roleType === 'developer',
-    )?.id;
     const agent = (
-      await f.call('POST', '/api/agents', {
-        name: 'dev',
-        soulId,
-        provider: 'claude',
-        providerConnectionId: provider,
-        model: 'claude-sonnet-5-5',
-      })
+      await f.call(
+        'POST',
+        '/api/agents',
+        await agentBody(f, {
+          name: 'dev',
+          role: 'developer',
+          provider: 'claude',
+          providerConnectionId: provider,
+          model: 'claude-sonnet-5-5',
+        }),
+      )
     ).json().id as string;
     await f.call('PUT', `/api/projects/${project.id}/team/${agent}`);
     const impact = await f.call(
@@ -452,20 +449,18 @@ describe('deleting a project', () => {
         apiKey: 'sk-ant-projects-2',
       })
     ).json().id as string;
-    const souls = (await f.call('GET', '/api/souls')).json() as {
-      id: string;
-      roleType: string;
-      isDefault: boolean;
-    }[];
     const agent = (
-      await f.call('POST', '/api/agents', {
-        name: 'dev',
-        soulId: souls.find((s) => s.isDefault && s.roleType === 'developer')
-          ?.id,
-        provider: 'claude',
-        providerConnectionId: provider,
-        model: 'claude-sonnet-5-5',
-      })
+      await f.call(
+        'POST',
+        '/api/agents',
+        await agentBody(f, {
+          name: 'dev',
+          role: 'developer',
+          provider: 'claude',
+          providerConnectionId: provider,
+          model: 'claude-sonnet-5-5',
+        }),
+      )
     ).json().id as string;
     await f.call('PUT', `/api/projects/${project.id}/team/${agent}`);
     f.db

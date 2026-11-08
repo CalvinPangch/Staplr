@@ -2,6 +2,7 @@ import { it, expect } from 'vitest';
 import { platformFixture } from '../integration/helpers';
 import { createGitRemote } from '../fakes/git-remote';
 import { validateResponse } from './harness';
+import { agentBody, type AgentSpec } from '../integration/agent-helpers';
 
 const problem = 'application/problem+json';
 
@@ -165,20 +166,19 @@ it('every project, team and repository response matches the contract', async () 
         apiKey: 'sk-ant-contract-team',
       })
     ).json().id as string;
-    const souls = (await f.call('GET', '/api/souls')).json() as {
-      id: string;
-      roleType: string;
-      isDefault: boolean;
-    }[];
     const makeAgent = async (name: string, role: string) =>
       (
-        await f.call('POST', '/api/agents', {
-          name,
-          soulId: souls.find((s) => s.isDefault && s.roleType === role)?.id,
-          provider: 'claude',
-          providerConnectionId: provider,
-          model: 'claude-sonnet-5-5',
-        })
+        await f.call(
+          'POST',
+          '/api/agents',
+          await agentBody(f, {
+            name,
+            role: role as AgentSpec['role'],
+            provider: 'claude',
+            providerConnectionId: provider,
+            model: 'claude-sonnet-5-5',
+          }),
+        )
       ).json().id as string;
     const pm = await makeAgent('Pat', 'project_manager');
     const pm2 = await makeAgent('Pam', 'project_manager');

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { PageBody, PageHeader } from '../../components/ui/PageHeader';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from '@tanstack/react-router';
 import { Terminal } from '@xterm/xterm';
@@ -185,110 +186,114 @@ export function ProviderLoginPage() {
       : null);
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1>Sign in to Codex</h1>
-        {finished && <StatusBadge status={finished.status} />}
-      </div>
-      <DataState
-        what="the sign-in session"
-        isLoading={session.isPending}
-        error={session.error}
-        isEmpty={false}
-        empty={null}
-        onRetry={() => void session.refetch()}
-      >
-        {session.data && (
-          <>
-            <p className="text-muted">{session.data.instructions}</p>
-            {finished ? (
-              <div className="flex flex-col gap-3">
-                <p role="status">
-                  {finished.status === 'expired'
-                    ? 'This sign-in session timed out. Nothing was saved. Start a new one from the Providers screen.'
-                    : finished.status === 'cancelled'
-                      ? 'This sign-in session was cancelled. Nothing was saved.'
-                      : finished.status === 'succeeded'
-                        ? 'This sign-in session finished and the login was saved. Staplr is now finding which models it can use; the Providers screen shows the result.'
-                        : (finished.reason ??
-                          'This sign-in session ended. Nothing was saved.')}
-                </p>
-                <Link
-                  to="/settings/providers"
-                  className="min-h-11 self-start py-2 underline"
-                >
-                  Back to providers
-                </Link>
-              </div>
-            ) : (
-              <>
-                {secondsLeft !== null && (
-                  <p className="text-sm">
-                    Time left:{' '}
-                    <time
-                      dateTime={`PT${Math.max(0, secondsLeft)}S`}
-                      className="font-mono"
+    <>
+      <PageHeader
+        title="Sign in to Codex"
+        description="Finish the Codex sign-in in the terminal below; it runs in an isolated sandbox."
+        action={finished && <StatusBadge status={finished.status} />}
+      />
+      <PageBody>
+        <DataState
+          what="the sign-in session"
+          isLoading={session.isPending}
+          error={session.error}
+          isEmpty={false}
+          empty={null}
+          onRetry={() => void session.refetch()}
+        >
+          {session.data && (
+            <>
+              <p className="text-muted">{session.data.instructions}</p>
+              {finished ? (
+                <div className="flex flex-col gap-3">
+                  <p role="status">
+                    {finished.status === 'expired'
+                      ? 'This sign-in session timed out. Nothing was saved. Start a new one from the Providers screen.'
+                      : finished.status === 'cancelled'
+                        ? 'This sign-in session was cancelled. Nothing was saved.'
+                        : finished.status === 'succeeded'
+                          ? 'This sign-in session finished and the login was saved. Staplr is now finding which models it can use; the Providers screen shows the result.'
+                          : (finished.reason ??
+                            'This sign-in session ended. Nothing was saved.')}
+                  </p>
+                  <Link
+                    to="/settings/providers"
+                    className="min-h-11 self-start py-2 underline"
+                  >
+                    Back to providers
+                  </Link>
+                </div>
+              ) : (
+                <>
+                  {secondsLeft !== null && (
+                    <p className="text-secondary">
+                      Time left:{' '}
+                      <time
+                        dateTime={`PT${Math.max(0, secondsLeft)}S`}
+                        className="font-mono"
+                      >
+                        {clock(secondsLeft)}
+                      </time>{' '}
+                      <span className="text-muted">
+                        (resets whenever you type in the terminal)
+                      </span>
+                    </p>
+                  )}
+                  {error && (
+                    <p
+                      role="alert"
+                      className="rounded-card border border-status-failed bg-status-failed-soft p-4 text-secondary text-status-failed"
                     >
-                      {clock(secondsLeft)}
-                    </time>{' '}
-                    <span className="text-muted">
-                      (resets whenever you type in the terminal)
-                    </span>
+                      {error}
+                    </p>
+                  )}
+                  {socketNote && (
+                    <p
+                      role="alert"
+                      className="rounded-card border border-status-attention bg-status-attention-soft p-4 text-secondary text-status-attention"
+                    >
+                      {socketNote}
+                    </p>
+                  )}
+                  <p className="text-secondary">
+                    After you sign in, Staplr finds which models this login can
+                    use. Finding your models sends one very short request per
+                    model (about 10).
                   </p>
-                )}
-                {error && (
-                  <p
-                    role="alert"
-                    className="rounded-lg border border-danger bg-danger-soft p-3 text-sm text-danger"
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="primary"
+                      busy={busy === 'complete'}
+                      onClick={() => void complete()}
+                    >
+                      I’ve finished logging in
+                    </Button>
+                    <Button
+                      busy={busy === 'cancel'}
+                      onClick={() => void cancel()}
+                    >
+                      Cancel sign-in
+                    </Button>
+                  </div>
+                  <div
+                    role="group"
+                    aria-label="Codex sign-in terminal. Press Escape to leave the terminal."
+                    className="overflow-x-auto rounded-control border border-control bg-black p-2"
                   >
-                    {error}
+                    <div ref={host} />
+                  </div>
+                  <p className="text-secondary text-muted">
+                    Press Escape to leave the terminal and reach the buttons. To
+                    copy the code, select it and press Ctrl+C. Without a
+                    selection, Ctrl+C stops the login and you have to start
+                    again.
                   </p>
-                )}
-                {socketNote && (
-                  <p
-                    role="alert"
-                    className="rounded-lg border border-warning bg-warning-soft p-3 text-sm text-warning"
-                  >
-                    {socketNote}
-                  </p>
-                )}
-                <p className="text-sm">
-                  After you sign in, Staplr finds which models this login can
-                  use. Finding your models sends one very short request per
-                  model (about 10).
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant="primary"
-                    busy={busy === 'complete'}
-                    onClick={() => void complete()}
-                  >
-                    I’ve finished logging in
-                  </Button>
-                  <Button
-                    busy={busy === 'cancel'}
-                    onClick={() => void cancel()}
-                  >
-                    Cancel sign-in
-                  </Button>
-                </div>
-                <div
-                  role="group"
-                  aria-label="Codex sign-in terminal. Press Escape to leave the terminal."
-                  className="overflow-x-auto rounded-lg border border-edge bg-black p-2"
-                >
-                  <div ref={host} />
-                </div>
-                <p className="text-sm text-muted">
-                  Press Escape to leave the terminal and reach the buttons. To
-                  copy the code, select it and press Ctrl+C. Without a
-                  selection, Ctrl+C stops the login and you have to start again.
-                </p>
-              </>
-            )}
-          </>
-        )}
-      </DataState>
-    </div>
+                </>
+              )}
+            </>
+          )}
+        </DataState>
+      </PageBody>
+    </>
   );
 }

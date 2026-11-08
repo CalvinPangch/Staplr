@@ -161,7 +161,9 @@ export function createSourceControlService({
         throw new ServiceError(
           503,
           'provider_unavailable',
-          `Could not reach ${platformName[platform]} to check the token. Retry in a moment.`,
+          result.status === undefined
+            ? `Could not reach ${platformName[platform]} to check the token. Retry in a moment.`
+            : `${platformName[platform]} answered with HTTP ${result.status} while checking the token, so it could not be checked. Retry in a moment.`,
         );
       const message = {
         invalid:
@@ -213,7 +215,10 @@ export function createSourceControlService({
       if (result.failure === 'unavailable') {
         put({
           lastCheckedAt: at,
-          lastCheckResult: `Could not reach ${platformName[row.platform]} to check this token. It will be checked again.`,
+          lastCheckResult:
+            result.status === undefined
+              ? `Could not reach ${platformName[row.platform]} to check this token. It will be checked again.`
+              : `${platformName[row.platform]} answered with HTTP ${result.status} while checking this token. It will be checked again.`,
         });
         return;
       }

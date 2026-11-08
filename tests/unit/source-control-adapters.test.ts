@@ -66,6 +66,15 @@ describe('GitHub classic tokens', () => {
     expect(await github.verifyToken('ghp_any')).toEqual({
       ok: false,
       failure: 'unavailable',
+      status: 503,
+    });
+  });
+
+  it('reports a network failure as unavailable with no status', async () => {
+    server.use(http.get(`${gh}/user`, () => HttpResponse.error()));
+    expect(await github.verifyToken('ghp_any')).toEqual({
+      ok: false,
+      failure: 'unavailable',
     });
   });
 });
@@ -114,6 +123,15 @@ describe('GitHub fine-grained tokens (permission probe)', () => {
     expect(await github.verifyToken('github_pat_nopr')).toMatchObject({
       ok: true,
       missingPermissions: ['create_pull_request'],
+    });
+  });
+
+  it('reports an unexpected probe answer with its status, not as unreachable', async () => {
+    fine({ write: 409 });
+    expect(await github.verifyToken('github_pat_odd')).toEqual({
+      ok: false,
+      failure: 'unavailable',
+      status: 409,
     });
   });
 

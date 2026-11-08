@@ -73,8 +73,6 @@ for (const theme of themes) {
         '/audit',
         '/settings/source-control',
         '/settings/providers',
-        '/souls',
-        '/souls/new',
         '/agents',
         '/agents/new',
         '/projects',
@@ -100,4 +98,89 @@ test('the theme can be changed and is remembered', async ({ page }) => {
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await page.getByLabel('Theme').selectOption('system');
   await expect(page.locator('html')).not.toHaveAttribute('data-theme', /.+/);
+});
+
+/**
+ * Feature 004, US4: every screen in both themes, at desktop and phone width,
+ * with reduced transparency, and at 200% text zoom; every control 44 × 44 px.
+ */
+const everyScreen = [
+  '/',
+  '/projects',
+  '/agents',
+  '/agents/new',
+  '/settings',
+  '/settings/providers',
+  '/settings/source-control',
+  '/audit',
+  '/diagnostics',
+];
+
+async function expectTouchTargets(page: Page) {
+  const small = await page.evaluate(() =>
+    [
+      ...document.querySelectorAll<HTMLElement>(
+        'main button, main a[href], main input, main select, main textarea, nav a[href], nav button',
+      ),
+    ]
+      .filter((el) => {
+        const box = el.getBoundingClientRect();
+        if (box.width === 0 || box.height === 0) return false;
+        // links inside running text are exempt (WCAG 2.5.8 inline exception)
+        if (el.tagName === 'A' && getComputedStyle(el).display === 'inline')
+          return false;
+        return box.width < 44 || box.height < 44;
+      })
+      .map((el) => `${el.tagName} "${el.textContent?.trim().slice(0, 30)}"`),
+  );
+  expect(small).toEqual([]);
+}
+
+for (const theme of themes)
+  for (const width of [1280, 320])
+    test(`${theme} theme at ${width} px: every screen passes axe, fits and has large targets`, async ({
+      page,
+    }) => {
+      await useTheme(page, theme);
+      await page.setViewportSize({ width, height: 800 });
+      await signInAsOwner(page);
+      for (const path of everyScreen) {
+        await page.goto(path);
+        await page.waitForLoadState('networkidle');
+        await expect(page.locator('main h1')).toBeVisible();
+        await axeCheck(page);
+        await expectNoHorizontalScroll(page);
+        await expectTouchTargets(page);
+      }
+    });
+
+test('every screen passes axe with reduced transparency', async ({ page }) => {
+  await signInAsOwner(page);
+  const session = await page.context().newCDPSession(page);
+  await session.send('Emulation.setEmulatedMedia', {
+    features: [{ name: 'prefers-reduced-transparency', value: 'reduce' }],
+  });
+  for (const path of everyScreen) {
+    await page.goto(path);
+    await page.waitForLoadState('networkidle');
+    expect(
+      await page.evaluate(
+        () => matchMedia('(prefers-reduced-transparency: reduce)').matches,
+      ),
+    ).toBe(true);
+    await axeCheck(page);
+  }
+});
+
+test('content reflows at 200% text zoom without sideways scrolling', async ({
+  page,
+}) => {
+  // 200% zoom of a 1280 px window is the same layout width as 640 px
+  await page.setViewportSize({ width: 640, height: 800 });
+  await signInAsOwner(page);
+  for (const path of everyScreen) {
+    await page.goto(path);
+    await page.waitForLoadState('networkidle');
+    await expectNoHorizontalScroll(page);
+  }
 });

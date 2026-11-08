@@ -18,7 +18,6 @@ test('keeps projects in the sidebar and groups workspace controls in settings', 
   for (const name of [
     'Source control',
     'Providers and prices',
-    'Souls',
     'Agents',
     'Audit log',
     'Diagnostics',

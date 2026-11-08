@@ -10,6 +10,8 @@ export default ts.config(
       'build/**',
       'coverage/**',
       '.tools/**',
+      '.dev-data/**',
+      'data/**',
       'playwright-report/**',
       'test-results/**',
     ],

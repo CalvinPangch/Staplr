@@ -12,7 +12,12 @@ export type ImpactSource = (connectionId: string) => Partial<Impact>;
 /** Models agents currently use on a connection; those are re-checked hourly. */
 export type ModelsInUseSource = (connectionId: string) => string[];
 
+/** Called inside the rename's transaction, so files that name the connection follow it. */
+export type RenameHook = (connectionId: string, newName: string) => void;
+
 export interface ImpactRegistry {
+  registerRenameHook(hook: RenameHook): void;
+  connectionRenamed(connectionId: string, newName: string): void;
   registerImpactSource(source: ImpactSource): void;
   getImpact(connectionId: string): Impact;
   registerModelsInUseSource(source: ModelsInUseSource): void;
@@ -32,7 +37,14 @@ function merge(items: ImpactItem[]): ImpactItem[] {
 export function createImpactRegistry(): ImpactRegistry {
   const sources: ImpactSource[] = [];
   const modelSources: ModelsInUseSource[] = [];
+  const renameHooks: RenameHook[] = [];
   return {
+    registerRenameHook(hook) {
+      renameHooks.push(hook);
+    },
+    connectionRenamed(connectionId, newName) {
+      for (const hook of renameHooks) hook(connectionId, newName);
+    },
     registerModelsInUseSource(source) {
       modelSources.push(source);
     },

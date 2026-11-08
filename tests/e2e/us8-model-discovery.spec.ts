@@ -1,5 +1,11 @@
 import type { Page } from '@playwright/test';
 import { test, expect, axeCheck, signInAsOwner } from './fixtures';
+import {
+  createAgent,
+  insertConnection,
+  setHeader,
+  startAgent,
+} from './agent-file';
 
 /**
  * Feature 002: after a Codex sign-in Staplr finds the models the login can use
@@ -10,11 +16,6 @@ test.describe.configure({ mode: 'serial' });
 
 const card = (page: Page, name: string) =>
   page.getByRole('listitem').filter({ hasText: name });
-
-async function choose(page: Page, label: string, option: string | RegExp) {
-  await page.getByRole('combobox', { name: label }).click();
-  await page.getByRole('option', { name: option }).click();
-}
 
 test('finds the models after a Codex sign-in and offers them without a manual check', async ({
   page,
@@ -45,15 +46,14 @@ test('finds the models after a Codex sign-in and offers them without a manual ch
   });
   await axeCheck(page);
 
-  await page.goto('/agents/new');
-  await page.getByLabel('Name').fill('Discovered');
-  await choose(page, 'Soul', /QA \(QA\)/);
-  await choose(page, 'Provider', 'Codex');
-  await choose(page, 'Connection', 'Discovery Codex');
   // A model Staplr's catalog has never heard of is offered with the name Codex gave it.
-  await choose(page, 'Model', 'Stub gpt-e2e-new');
-  await page.getByRole('button', { name: 'Create agent' }).click();
-  await expect(page).toHaveURL(/\/agents$/);
+  await createAgent(page, {
+    template: 'QA',
+    name: 'Discovered',
+    provider: 'codex',
+    connection: 'Discovery Codex',
+    model: 'Stub gpt-e2e-new',
+  });
   await expect(card(page, 'Discovered').getByText('Ready')).toBeVisible();
   await axeCheck(page);
 });
@@ -121,9 +121,9 @@ test('prices come from the official pages and are shown beside each model', asyn
   );
   await axeCheck(page);
 
-  await page.goto('/agents/new');
-  await choose(page, 'Provider', 'Codex');
-  await choose(page, 'Connection', 'Discovery Codex');
+  await startAgent(page, 'Developer');
+  await setHeader(page, { provider: 'codex' });
+  await insertConnection(page, 'Discovery Codex');
   const models = page.getByRole('region', {
     name: 'Models for this connection',
   });

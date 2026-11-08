@@ -75,7 +75,7 @@ export function Combobox({
 
   return (
     <div className="relative flex flex-col gap-1">
-      <label htmlFor={id} className="text-sm font-medium">
+      <label htmlFor={id} className="text-secondary font-medium">
         {label}
       </label>
       <input
@@ -100,8 +100,8 @@ export function Combobox({
         onBlur={() => setOpen(false)}
         onKeyDown={onKeyDown}
         className={cn(
-          'min-h-11 rounded-lg border bg-bg px-3 py-2 text-fg',
-          error ? 'border-danger' : 'border-edge',
+          'min-h-11 rounded-control border bg-surface px-3 py-2 text-fg',
+          error ? 'border-status-failed' : 'border-control',
         )}
       />
       <ul
@@ -109,7 +109,7 @@ export function Combobox({
         role="listbox"
         aria-label={label}
         hidden={!open}
-        className="absolute top-full z-40 mt-1 max-h-72 w-full overflow-y-auto rounded-lg border border-edge bg-bg p-1 shadow-lg"
+        className="absolute top-full z-40 mt-1 max-h-72 w-full overflow-y-auto rounded-card border border-separator bg-surface-raised p-1 shadow-card"
       >
         {options.map((option, index) => (
           <li
@@ -125,28 +125,33 @@ export function Combobox({
               choose(option);
             }}
             className={cn(
-              'flex min-h-11 cursor-pointer flex-col justify-center rounded px-3 py-2',
-              index === active && 'bg-surface-strong',
+              'flex min-h-11 cursor-pointer flex-col justify-center rounded-control px-3 py-2',
+              index === active && 'bg-bg',
               option.disabled && 'cursor-not-allowed opacity-60',
             )}
           >
             <span>{option.label}</span>
             {option.description && (
-              <span className="text-sm text-muted">{option.description}</span>
+              <span className="text-secondary text-muted">
+                {option.description}
+              </span>
             )}
           </li>
         ))}
       </ul>
-      <p role="status" className="text-sm text-muted">
+      <p role="status" className="text-secondary text-muted">
         {status}
       </p>
       {hint && (
-        <p id={hintId} className="text-sm text-muted">
+        <p id={hintId} className="text-secondary text-muted">
           {hint}
         </p>
       )}
       {error && (
-        <p id={errorId} className="text-sm font-medium text-danger">
+        <p
+          id={errorId}
+          className="text-secondary font-medium text-status-failed"
+        >
           {error}
         </p>
       )}

@@ -394,6 +394,10 @@ and by keyboard; reload and confirm every position is kept.
 
 **Souls (agent roles)**
 
+> **Superseded by feature 003** (`specs/003-merge-soul-agent/`): souls were removed and each agent
+> is now one Markdown file holding its role and instructions. FR-015 to FR-019, and the soul parts of
+> FR-020 and FR-022, no longer apply.
+
 - **FR-015**: System MUST include default souls for Project Manager, Business Analyst, Developer,
   and QA.
 - **FR-016**: The user MUST be able to create, view, copy, edit, and delete custom souls. Each soul

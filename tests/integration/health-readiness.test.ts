@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { createScheduler } from '../../src/server/modules/health/scheduler';
 import { createGitRemote } from '../fakes/git-remote';
 import { platformFixture } from './helpers';
+import { agentBody } from './agent-helpers';
 
 /**
  * SC-006 / FR-013 / FR-014. Each checker or readiness behavior adds its cases
@@ -94,21 +95,18 @@ describe('connection and readiness behavior', () => {
         apiKey: key,
       })
     ).json().id as string;
-    const souls = (await f.call('GET', '/api/souls')).json() as {
-      id: string;
-      roleType: string;
-      isDefault: boolean;
-    }[];
     const agent = (
-      await f.call('POST', '/api/agents', {
-        name: 'pm',
-        soulId: souls.find(
-          (x) => x.isDefault && x.roleType === 'project_manager',
-        )?.id,
-        provider: 'claude',
-        providerConnectionId: provider,
-        model: 'claude-sonnet-5-5',
-      })
+      await f.call(
+        'POST',
+        '/api/agents',
+        await agentBody(f, {
+          name: 'pm',
+          role: 'project_manager',
+          provider: 'claude',
+          providerConnectionId: provider,
+          model: 'claude-sonnet-5-5',
+        }),
+      )
     ).json().id as string;
     await f.call('PUT', `/api/projects/${project}/team/${agent}`);
     return { f, remote, scc, project, provider, agent };

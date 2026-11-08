@@ -22,12 +22,15 @@ export function SignInPage() {
   });
 
   return (
-    <div className="auth-panel mx-auto flex max-w-md flex-col gap-4">
+    <div
+      data-card=""
+      className="flex flex-col gap-4 rounded-card border border-separator bg-surface p-4 shadow-card md:p-6"
+    >
       <h1>Sign in</h1>
       {serverError && (
         <p
           role="alert"
-          className="rounded-lg border border-danger bg-danger-soft p-3 text-danger"
+          className="rounded-card border border-status-failed bg-status-failed-soft p-4 text-status-failed"
         >
           {serverError}
         </p>

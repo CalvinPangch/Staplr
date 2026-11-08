@@ -120,28 +120,30 @@ export const sandboxLoginSessions = sqliteTable('sandbox_login_session', {
   endedAt: text('endedAt'),
   resultConnectionId: text('resultConnectionId'),
 });
-export const souls = sqliteTable('soul', {
-  id: text('id').primaryKey(),
-  name: text('name').notNull(),
-  roleType: text('roleType', {
-    enum: ['project_manager', 'business_analyst', 'developer', 'qa', 'custom'],
-  }).notNull(),
-  description: text('description').notNull(),
-  instructions: text('instructions').notNull(),
-  isDefault: integer('isDefault', { mode: 'boolean' }).notNull().default(false),
-  copiedFromId: text('copiedFromId'),
-  createdAt: text('createdAt').notNull(),
-  updatedAt: text('updatedAt').notNull(),
-});
+/** Feature 003: an agent is one Markdown file; the columns are a parsed copy of its header. */
 export const agents = sqliteTable('agent', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
-  soulId: text('soulId').notNull(),
+  role: text('role', {
+    enum: ['project_manager', 'business_analyst', 'developer', 'qa', 'custom'],
+  }).notNull(),
   provider: text('provider', { enum: ['claude', 'codex'] }).notNull(),
   providerConnectionId: text('providerConnectionId'),
-  model: text('model').notNull(),
+  model: text('model'),
+  definition: text('definition').notNull(),
+  revision: integer('revision').notNull().default(1),
   createdAt: text('createdAt').notNull(),
   updatedAt: text('updatedAt').notNull(),
+});
+/** Templates kept from custom souls that no agent used at the 0010 upgrade. */
+export const roleTemplates = sqliteTable('role_template', {
+  id: text('id').primaryKey(),
+  role: text('role', {
+    enum: ['project_manager', 'business_analyst', 'developer', 'qa', 'custom'],
+  }).notNull(),
+  label: text('label').notNull(),
+  body: text('body').notNull(),
+  createdAt: text('createdAt').notNull(),
 });
 export const projects = sqliteTable('project', {
   id: text('id').primaryKey(),
