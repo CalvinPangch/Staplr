@@ -128,6 +128,18 @@ export function buildApp({
         message: 'Use this installation in its own browser tab and retry.',
       });
   });
+  // Every error answer is a Problem (application/problem+json), including those sent
+  // directly by the auth, audit and diagnostics routes.
+  app.addHook('onSend', async (_request, reply, payload) => {
+    if (
+      reply.statusCode >= 400 &&
+      String(reply.getHeader('content-type') ?? '').startsWith(
+        'application/json',
+      )
+    )
+      reply.type('application/problem+json');
+    return payload;
+  });
   app.setErrorHandler((error, request, reply) => {
     if (
       error instanceof Error &&
