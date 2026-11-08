@@ -11,6 +11,7 @@ import { useAnnounce } from '../../components/ui/LiveRegion';
 import { formatTime } from '../source-control/api';
 import { fetchModels, modelStatusText, modelsKey } from '../agents/api';
 import { providersKey } from './api';
+import { ModelPrice } from '../prices/ModelPrice';
 
 const summary = (models: ModelAccess[]) =>
   new Map(models.map((m) => [m.id, m.availability]));
@@ -179,6 +180,9 @@ export function CodexModels({
                     }
                   >
                     {modelStatusText(model)}
+                  </span>
+                  <span className="basis-full">
+                    <ModelPrice price={model.price} />
                   </span>
                 </li>
               ))}

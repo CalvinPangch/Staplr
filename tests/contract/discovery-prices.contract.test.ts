@@ -32,6 +32,11 @@ it('connection and model-list responses include discovery and match the contract
     expect(models.statusCode).toBe(200);
     validateResponse('/api/models', 'get', 200, models.json());
     expect(models.json().discoveryStatus).toBe('finished');
+    // every model carries its list price, or nulls for Unknown
+    for (const model of models.json().models as { price?: unknown }[])
+      expect(model.price).toMatchObject({
+        label: 'List price used for estimates',
+      });
   } finally {
     await f.app.providers.whenDiscoveryIdle();
     await f.close();

@@ -1,28 +1,22 @@
 import { readFileSync } from 'node:fs';
 import { z } from 'zod';
 
-const decimal = z.string().regex(/^\d+(\.\d{1,6})?$/);
-
 export const providerSchema = z.enum(['claude', 'codex']);
 export type Provider = z.infer<typeof providerSchema>;
 
-const modelSchema = z.object({
-  provider: providerSchema,
-  id: z.string().min(1).max(200),
-  label: z.string().min(1).max(120),
-  retired: z.boolean(),
-  probeModel: z.boolean(),
-  inputPricePerMTok: decimal.nullable(),
-  outputPricePerMTok: decimal.nullable(),
-  priceSource: z
-    .string()
-    .regex(/^https:\/\//)
-    .optional(),
-  pricesAsOf: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .optional(),
-});
+/**
+ * One shipped model. Since feature 002 the catalog carries no prices: prices
+ * come only from the providers' official pages, so an entry with a price is refused.
+ */
+const modelSchema = z
+  .object({
+    provider: providerSchema,
+    id: z.string().min(1).max(200),
+    label: z.string().min(1).max(120),
+    retired: z.boolean(),
+    probeModel: z.boolean(),
+  })
+  .strict();
 export type CatalogModel = z.infer<typeof modelSchema>;
 
 export const catalogSchema = z
@@ -41,20 +35,6 @@ export const catalogSchema = z
           message: `Duplicate model ${key}`,
         });
       seen.add(key);
-      const priced =
-        m.inputPricePerMTok !== null || m.outputPricePerMTok !== null;
-      if ((m.inputPricePerMTok === null) !== (m.outputPricePerMTok === null))
-        ctx.addIssue({
-          code: 'custom',
-          path: ['models', index],
-          message: 'A model needs both prices or neither',
-        });
-      if (priced && (!m.priceSource || !m.pricesAsOf))
-        ctx.addIssue({
-          code: 'custom',
-          path: ['models', index],
-          message: 'A price needs its source page and the date it was copied',
-        });
     });
   });
 export type Catalog = z.infer<typeof catalogSchema>;

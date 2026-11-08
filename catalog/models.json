@@ -6,78 +6,56 @@
       "id": "claude-fable-5-1",
       "label": "Claude Fable 5.1",
       "retired": false,
-      "probeModel": false,
-      "inputPricePerMTok": "10",
-      "outputPricePerMTok": "50",
-      "priceSource": "https://platform.claude.com/docs/en/about-claude/pricing",
-      "pricesAsOf": "2026-11-08"
+      "probeModel": false
     },
     {
       "provider": "claude",
       "id": "claude-opus-5-5",
       "label": "Claude Opus 5.5",
       "retired": false,
-      "probeModel": false,
-      "inputPricePerMTok": "4",
-      "outputPricePerMTok": "20",
-      "priceSource": "https://platform.claude.com/docs/en/about-claude/pricing",
-      "pricesAsOf": "2026-11-08"
+      "probeModel": false
     },
     {
       "provider": "claude",
       "id": "claude-sonnet-5-5",
       "label": "Claude Sonnet 5.5",
       "retired": false,
-      "probeModel": false,
-      "inputPricePerMTok": "2",
-      "outputPricePerMTok": "10",
-      "priceSource": "https://platform.claude.com/docs/en/about-claude/pricing",
-      "pricesAsOf": "2026-11-08"
+      "probeModel": false
     },
     {
       "provider": "claude",
       "id": "claude-haiku-5-5",
       "label": "Claude Haiku 5.5",
       "retired": false,
-      "probeModel": true,
-      "inputPricePerMTok": null,
-      "outputPricePerMTok": null
+      "probeModel": true
     },
     {
       "provider": "codex",
       "id": "gpt-6-astra",
       "label": "Astra",
       "retired": false,
-      "probeModel": false,
-      "inputPricePerMTok": null,
-      "outputPricePerMTok": null
+      "probeModel": false
     },
     {
       "provider": "codex",
       "id": "gpt-6.1-sol",
       "label": "GPT-6.1 Sol",
       "retired": false,
-      "probeModel": false,
-      "inputPricePerMTok": null,
-      "outputPricePerMTok": null
+      "probeModel": false
     },
     {
       "provider": "codex",
       "id": "gpt-6.1-terra",
       "label": "GPT-6.1 Terra",
       "retired": false,
-      "probeModel": false,
-      "inputPricePerMTok": null,
-      "outputPricePerMTok": null
+      "probeModel": false
     },
     {
       "provider": "codex",
       "id": "gpt-6-luna",
       "label": "GPT-6 Luna",
       "retired": false,
-      "probeModel": true,
-      "inputPricePerMTok": null,
-      "outputPricePerMTok": null
+      "probeModel": true
     }
   ]
 }

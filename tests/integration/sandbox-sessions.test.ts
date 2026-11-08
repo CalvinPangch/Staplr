@@ -455,7 +455,8 @@ describe('Codex health and exact-model checks', () => {
     await f.scheduler.runAll();
     expect(await statusOf(id)).toBe('needs_relogin');
     expect(await statusOf(claude)).toBe('needs_relogin');
-  });
+    // 720 simulated hours, each with a Codex re-list and a daily price read
+  }, 60_000);
 });
 
 describe('a reconnecting browser', () => {

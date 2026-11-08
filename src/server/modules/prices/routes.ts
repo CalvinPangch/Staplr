@@ -2,7 +2,6 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { sendProblem, ServiceError } from '../../lib/problem.js';
 import type { ProviderService } from '../providers/service.js';
-import { priceInputSchema } from '../../../shared/schemas/prices.js';
 import { catalogRevision } from './catalog.js';
 import type { PriceService } from './service.js';
 
@@ -11,8 +10,9 @@ const modelsQuery = z.object({
 });
 
 /**
- * Catalog candidates for one connection, each with that connection's own
- * availability evidence. Unknown entries stay listed so they can be checked.
+ * Prices are read-only: they come from the providers' official pages
+ * (feature 002). The model list for one connection carries each model's
+ * availability for that connection and its current list price.
  */
 export function priceRoutes(
   app: FastifyInstance,
@@ -21,28 +21,12 @@ export function priceRoutes(
 ) {
   app.get('/api/model-prices', () => prices.list());
 
-  app.post('/api/model-prices', (request, reply) => {
-    const parsed = priceInputSchema.safeParse(request.body);
-    if (!parsed.success)
-      return sendProblem(
-        reply,
-        422,
-        'invalid_input',
-        [...new Set(parsed.error.issues.map((i) => i.message))].join(' '),
-      );
-    try {
-      return reply.code(201).send(prices.setPrice(parsed.data));
-    } catch (error) {
-      if (error instanceof ServiceError)
-        return sendProblem(
-          reply,
-          error.status,
-          error.code,
-          error.message,
-          error.details,
-        );
-      throw error;
-    }
+  app.get('/api/prices/status', () => prices.status());
+
+  /** "Refresh prices": starts a read now; a request while one runs joins it. */
+  app.post('/api/prices/refresh', (_request, reply) => {
+    void prices.refresh();
+    return reply.code(202).send(prices.status());
   });
 
   app.get('/api/models', (request, reply) => {
@@ -60,7 +44,12 @@ export function priceRoutes(
         catalogRevision: catalogRevision(),
         discoveryStatus: connection.discoveryStatus,
         modelsRefreshedAt: connection.modelsRefreshedAt,
-        models: providers.listModelAccess(query.data.providerConnectionId),
+        models: providers
+          .listModelAccess(query.data.providerConnectionId)
+          .map((model) => ({
+            ...model,
+            price: prices.priceFor(connection.provider, model.id),
+          })),
       };
     } catch (error) {
       if (error instanceof ServiceError)

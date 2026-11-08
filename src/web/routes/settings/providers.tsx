@@ -7,6 +7,7 @@ import { useAnnounce } from '../../components/ui/LiveRegion';
 import { ApiKeyDialog } from '../../features/providers/ApiKeyDialog';
 import { CodexLoginDialog } from '../../features/providers/CodexLoginDialog';
 import { ProviderCard } from '../../features/providers/ProviderCard';
+import { PricesPanel } from '../../features/prices/PricesPanel';
 import {
   fetchProviders,
   providersKey,
@@ -109,6 +110,7 @@ export function ProvidersPage() {
           ))}
         </ul>
       </DataState>
+      <PricesPanel />
       <ApiKeyDialog open={addingClaude} onOpenChange={setAddingClaude} />
       <CodexLoginDialog open={addingCodex} onOpenChange={setAddingCodex} />
     </div>

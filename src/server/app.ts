@@ -42,7 +42,8 @@ import { createTicketService } from './modules/tickets/service.js';
 import { registerAgentImpact } from './modules/agents/impact.js';
 import { createAgentService } from './modules/agents/service.js';
 import { priceRoutes } from './modules/prices/routes.js';
-import { createPriceService, mergeCatalog } from './modules/prices/service.js';
+import { createPriceService } from './modules/prices/service.js';
+import { loadCatalog } from './modules/prices/catalog.js';
 import { soulRoutes } from './modules/souls/routes.js';
 import { createSoulService } from './modules/souls/service.js';
 import { sourceControlRoutes } from './modules/source-control/routes.js';
@@ -228,8 +229,14 @@ export function buildApp({
   registerAgentImpact({ db, impact: impactRegistry, souls });
   agentRoutes(app, agents);
   // The catalog shipped with this release is merged before anything reads prices or models.
-  mergeCatalog(db, new Date(clock()).toISOString());
-  const prices = createPriceService({ db, clock });
+  // The shipped catalog is validated before anything reads models; prices come
+  // only from the official pages (feature 002).
+  loadCatalog();
+  const prices = createPriceService({
+    db,
+    clock,
+    pricingUrls: config.pricingUrls,
+  });
   app.decorate('prices', prices);
   priceRoutes(app, providers, prices);
   const downloads = createDownloadManager({
@@ -264,6 +271,8 @@ export function buildApp({
   healthRoutes(app, scheduler);
   registerSourceControlChecker(scheduler, sourceControl);
   registerProviderChecker(scheduler, providers);
+  // Start-up and hourly; each page is read again once its last good read is a day old.
+  scheduler.registerChecker('prices', () => prices.refreshIfDue());
   if (webRoot) app.register(fastifyStatic, { root: webRoot, wildcard: false });
   app.setNotFoundHandler((request, reply) => {
     const path = request.url.split('?')[0] ?? '';

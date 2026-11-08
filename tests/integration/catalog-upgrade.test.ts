@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { Catalog } from '../../src/server/modules/prices/catalog';
-import { mergeCatalog } from '../../src/server/modules/prices/service';
 import { platformFixture } from './helpers';
 
 /**
  * A new release of the app can ship a revised catalog. These tests swap the
- * catalog the app sees to prove upgrades keep user prices and history and
- * invalidate access evidence that was gathered under the old catalog.
+ * catalog the app sees to prove upgrades invalidate access evidence that was
+ * gathered under the old catalog. Since feature 002 the catalog carries no
+ * prices; prices come only from the official pages (official-prices.test.ts).
  */
 const state = vi.hoisted(() => ({ catalog: null as Catalog | null }));
 vi.mock('../../src/server/modules/prices/catalog', async (importOriginal) => {
@@ -40,120 +40,6 @@ const base = async (): Promise<Catalog> => {
   >('../../src/server/modules/prices/catalog');
   return structuredClone(original.loadCatalog());
 };
-const rows = (model: string) =>
-  f.db
-    .prepare(
-      'SELECT * FROM model_price WHERE model=? ORDER BY effectiveFrom, rowid',
-    )
-    .all(model) as {
-    id: string;
-    inputPricePerMTok: string | null;
-    effectiveUntil: string | null;
-    source: string;
-    pricesAsOf: string | null;
-  }[];
-const at = () => new Date(f.now()).toISOString();
-
-describe('catalog reconciliation', () => {
-  it('adds a default row for a new model and nothing for unchanged ones', async () => {
-    const next = await base();
-    const before = (
-      f.db.prepare('SELECT COUNT(*) AS n FROM model_price').get() as {
-        n: number;
-      }
-    ).n;
-    next.revision = '2026-12-01.1';
-    next.models.push({
-      provider: 'claude',
-      id: 'claude-new-6',
-      label: 'Claude New 6',
-      retired: false,
-      probeModel: false,
-      inputPricePerMTok: '1',
-      outputPricePerMTok: '5',
-      priceSource: 'https://example.test/pricing',
-      pricesAsOf: '2026-12-01',
-    });
-    f.advance(1000);
-    mergeCatalog(f.db, at(), next);
-    expect(
-      (
-        f.db.prepare('SELECT COUNT(*) AS n FROM model_price').get() as {
-          n: number;
-        }
-      ).n,
-    ).toBe(before + 1);
-    expect(rows('claude-new-6')).toHaveLength(1);
-    mergeCatalog(f.db, at(), next);
-    expect(
-      (
-        f.db.prepare('SELECT COUNT(*) AS n FROM model_price').get() as {
-          n: number;
-        }
-      ).n,
-    ).toBe(before + 1);
-  });
-
-  it('closes a changed default at reconciliation time and opens a new one', async () => {
-    const next = await base();
-    const model = next.models.find((m) => m.id === 'claude-sonnet-5-5');
-    if (!model) throw new Error('fixture model missing');
-    model.inputPricePerMTok = '3';
-    model.pricesAsOf = '2026-12-01';
-    next.revision = '2026-12-01.1';
-    f.advance(86_400_000);
-    mergeCatalog(f.db, at(), next);
-    const history = rows('claude-sonnet-5-5');
-    expect(history).toHaveLength(2);
-    expect(history[0]?.effectiveUntil).toBe(at());
-    expect(history[1]).toMatchObject({
-      inputPricePerMTok: '3',
-      effectiveUntil: null,
-      source: 'default',
-      pricesAsOf: '2026-12-01',
-    });
-  });
-
-  it('never replaces a price the user set, but keeps the default history', async () => {
-    f.advance(1000);
-    await f.call('POST', '/api/model-prices', {
-      provider: 'claude',
-      model: 'claude-sonnet-5-5',
-      inputPricePerMTok: '9',
-      outputPricePerMTok: '99',
-    });
-    const before = rows('claude-sonnet-5-5');
-    const next = await base();
-    const model = next.models.find((m) => m.id === 'claude-sonnet-5-5');
-    if (!model) throw new Error('fixture model missing');
-    model.inputPricePerMTok = '3';
-    model.pricesAsOf = '2026-12-01';
-    f.advance(1000);
-    mergeCatalog(f.db, at(), next);
-    expect(rows('claude-sonnet-5-5')).toEqual(before);
-    const current = rows('claude-sonnet-5-5').filter(
-      (r) => r.effectiveUntil === null,
-    );
-    expect(current).toHaveLength(1);
-    expect(current[0]).toMatchObject({
-      source: 'user',
-      inputPricePerMTok: '9',
-    });
-  });
-
-  it('keeps history for a model that was removed or retired', async () => {
-    const next = await base();
-    next.models = next.models.filter(
-      (m) => m.id !== 'claude-haiku-5-5' || m.probeModel === false,
-    );
-    const retired = next.models.find((m) => m.id === 'claude-fable-5-1');
-    if (retired) retired.retired = true;
-    next.revision = '2026-12-01.1';
-    mergeCatalog(f.db, at(), next);
-    expect(rows('claude-fable-5-1').length).toBeGreaterThan(0);
-  });
-});
-
 describe('what an upgrade does to model access and agents', () => {
   const key = 'sk-ant-upgrade-1';
   const models = ['claude-sonnet-5-5', 'claude-opus-5-5'];

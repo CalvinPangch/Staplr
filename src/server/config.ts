@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { officialPages } from './modules/prices/official.js';
 const schema = z.object({
   STAPLR_MASTER_KEY: z
     .string()
@@ -26,6 +27,9 @@ const schema = z.object({
   STAPLR_TEST_GITHUB_API_URL: z.string().url().optional(),
   /** Points the Anthropic Models API client at a fake. Only honoured in test mode. */
   STAPLR_TEST_ANTHROPIC_API_URL: z.string().url().optional(),
+  /** Point the official pricing page reads at fakes. Only honoured in test mode. */
+  STAPLR_TEST_CLAUDE_PRICING_URL: z.string().url().optional(),
+  STAPLR_TEST_OPENAI_PRICING_URL: z.string().url().optional(),
   /** How the Codex CLI is driven in the sandbox. stub is for tests only. */
   STAPLR_CODEX_PROFILE: z.enum(['real', 'stub']).default('real'),
   STAPLR_CODEX_IMAGE: z.string().min(1).max(200).optional(),
@@ -58,6 +62,14 @@ export function parseConfig(env: Record<string, string | undefined>) {
     throw new Error(
       'STAPLR_TEST_ANTHROPIC_API_URL is only allowed when STAPLR_TEST_MODE=1',
     );
+  if (
+    (value.STAPLR_TEST_CLAUDE_PRICING_URL ||
+      value.STAPLR_TEST_OPENAI_PRICING_URL) &&
+    value.STAPLR_TEST_MODE !== '1'
+  )
+    throw new Error(
+      'STAPLR_TEST_*_PRICING_URL is only allowed when STAPLR_TEST_MODE=1',
+    );
   if (value.STAPLR_CODEX_PROFILE === 'stub' && value.STAPLR_TEST_MODE !== '1')
     throw new Error(
       'STAPLR_CODEX_PROFILE=stub is only allowed when STAPLR_TEST_MODE=1',
@@ -76,6 +88,11 @@ export function parseConfig(env: Record<string, string | undefined>) {
     githubApiUrl: value.STAPLR_TEST_GITHUB_API_URL ?? 'https://api.github.com',
     anthropicApiUrl:
       value.STAPLR_TEST_ANTHROPIC_API_URL ?? 'https://api.anthropic.com',
+    /** where prices are read from; the stored source is always the official page */
+    pricingUrls: {
+      claude: value.STAPLR_TEST_CLAUDE_PRICING_URL ?? officialPages.claude,
+      codex: value.STAPLR_TEST_OPENAI_PRICING_URL ?? officialPages.codex,
+    },
     codexProfile: value.STAPLR_CODEX_PROFILE,
     codexImage:
       value.STAPLR_CODEX_IMAGE ??

@@ -29,6 +29,7 @@ import {
   useAgents,
 } from '../../features/agents/api';
 import { discoveryPollMs } from '../../features/providers/api';
+import { ModelPrice } from '../../features/prices/ModelPrice';
 import {
   providerName,
   useProviderConnections,
@@ -111,6 +112,7 @@ function ModelList({
                   </>
                 )}
               </span>
+              <ModelPrice price={model.price} />
             </div>
             <Button
               busy={checking === model.id}

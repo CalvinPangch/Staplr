@@ -14,7 +14,6 @@ import { ProvidersPage } from './routes/settings/providers';
 import { AgentEditorPage } from './routes/agents/$agentId';
 import { AgentsPage } from './routes/agents';
 import { DiagnosticsPage } from './routes/diagnostics';
-import { ModelPricesPage } from './routes/model-prices';
 import { ProjectDetailPage } from './routes/projects/$projectId';
 import { ProjectsPage } from './routes/projects';
 import { SoulEditorPage } from './routes/souls/$soulId';
@@ -139,11 +138,6 @@ export function createAppRouter(queryClient: QueryClient) {
       getParentRoute: () => rootRoute,
       path: '/projects/$projectId',
       component: ProjectDetailPage,
-    }),
-    createRoute({
-      getParentRoute: () => rootRoute,
-      path: '/model-prices',
-      component: ModelPricesPage,
     }),
     createRoute({
       getParentRoute: () => rootRoute,

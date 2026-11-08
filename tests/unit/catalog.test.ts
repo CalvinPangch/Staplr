@@ -32,19 +32,15 @@ describe('shipped model catalog', () => {
     }
   });
 
-  it('allows prices only as non-negative decimals or null, with a source and date', () => {
-    for (const m of catalogSchema.parse(raw).models) {
-      for (const price of [m.inputPricePerMTok, m.outputPricePerMTok]) {
-        if (price === null) continue;
-        expect(price, m.id).toMatch(/^\d+(\.\d{1,6})?$/);
-        expect(m.priceSource, m.id).toMatch(/^https:\/\//);
-        expect(m.pricesAsOf, m.id).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-      }
-      expect(
-        (m.inputPricePerMTok === null) === (m.outputPricePerMTok === null),
-        `${m.id} must have both prices or neither`,
-      ).toBe(true);
-    }
+  it('carries no prices; prices come only from the official pages', () => {
+    for (const m of (raw as { models: Record<string, unknown>[] }).models)
+      for (const field of [
+        'inputPricePerMTok',
+        'outputPricePerMTok',
+        'priceSource',
+        'pricesAsOf',
+      ])
+        expect(m, `${String(m.id)} ${field}`).not.toHaveProperty(field);
   });
 
   it('has exactly one non-retired probeModel per provider', () => {
@@ -69,8 +65,6 @@ describe('shipped model catalog', () => {
           label: 'Retired',
           retired: true,
           probeModel: false,
-          inputPricePerMTok: null,
-          outputPricePerMTok: null,
         },
       ],
     });
@@ -80,7 +74,7 @@ describe('shipped model catalog', () => {
     expect(listModels('claude', catalog).length).toBeGreaterThan(0);
   });
 
-  it('rejects a catalog that has a price without its source and date', () => {
+  it('rejects a catalog entry that has a price', () => {
     expect(() =>
       catalogSchema.parse({
         revision: 'bad',

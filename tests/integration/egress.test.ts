@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createInstallation } from '../../src/server/main';
@@ -12,13 +12,46 @@ import { createGitlabAdapter } from '../../src/server/modules/source-control/ada
 
 /**
  * FR-043: the Staplr process may contact only the GitHub API, a configured
- * GitLab instance, api.anthropic.com (owner key checks) and the Docker proxy.
+ * GitLab instance, api.anthropic.com (owner key checks), the two official
+ * pricing pages (feature 002, research R7) and the Docker proxy.
  * No telemetry, no other third party. Each external integration adds its case
  * here BEFORE its code (research R21). Sandbox container network behavior is
  * verified separately in the Docker tests.
  */
+export const pricingHosts = ['platform.claude.com', 'developers.openai.com'];
 export const allowedHosts = (extra: string[] = []) =>
-  new Set(['api.github.com', 'api.anthropic.com', ...extra]);
+  new Set(['api.github.com', 'api.anthropic.com', ...pricingHosts, ...extra]);
+
+/** Header names sent with each price read, to prove no credential is sent. */
+const pricingHeaders: string[] = [];
+
+/** Serves the saved copies of the official pricing pages in place of the live sites. */
+const pricingHandlers = () => [
+  http.get(
+    'https://platform.claude.com/docs/en/about-claude/pricing.md',
+    ({ request }) => {
+      pricingHeaders.push(...request.headers.keys());
+      return new HttpResponse(
+        readFileSync('tests/fixtures/pricing-claude.md'),
+        {
+          headers: { 'content-type': 'text/markdown' },
+        },
+      );
+    },
+  ),
+  http.get(
+    'https://developers.openai.com/api/docs/pricing.md',
+    ({ request }) => {
+      pricingHeaders.push(...request.headers.keys());
+      return new HttpResponse(
+        readFileSync('tests/fixtures/pricing-openai.md'),
+        {
+          headers: { 'content-type': 'text/markdown' },
+        },
+      );
+    },
+  ),
+];
 
 const attempted: string[] = [];
 const server = setupServer();
@@ -52,8 +85,9 @@ describe('interception control', () => {
   });
 });
 describe('outbound traffic from the Staplr process', () => {
-  it('makes no outbound request while starting and serving its own pages and API', async () => {
+  it('while starting and serving, contacts only the official pricing pages', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'staplr-egress-'));
+    server.use(...pricingHandlers());
     attempted.length = 0;
     const installation = await createInstallation(
       { ...env, DATA_DIR: dir },
@@ -63,10 +97,18 @@ describe('outbound traffic from the Staplr process', () => {
       await installation.app.inject({ url: '/api/setup/status' });
       await installation.app.inject({ url: '/' });
       await installation.scheduler.runAll();
+      await installation.app.prices.whenIdle();
       const outside = attempted.filter((host) => !allowedHosts().has(host));
       expect(outside).toEqual([]);
-      expect(attempted).toEqual([]);
+      expect([...new Set(attempted)].sort()).toEqual([...pricingHosts].sort());
+      // the price reads carry no credentials or cookies
+      expect(pricingHeaders.length).toBeGreaterThan(0);
+      for (const name of pricingHeaders)
+        expect(['authorization', 'cookie', 'x-api-key']).not.toContain(
+          name.toLowerCase(),
+        );
     } finally {
+      server.resetHandlers();
       await installation.close();
       rmSync(dir, { recursive: true, force: true });
     }

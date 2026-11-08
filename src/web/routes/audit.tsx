@@ -32,6 +32,8 @@ const actionLabels: Record<string, string> = {
   'project.created': 'Project added',
   'project.deleted': 'Project deleted',
   'price.changed': 'Model price changed',
+  'models.discovered': 'Codex models found',
+  'prices.refreshed': 'Prices read from the official page',
 };
 
 export function AuditPage() {

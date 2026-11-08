@@ -54,6 +54,8 @@ const anthropicPort = env.FAKE_ANTHROPIC_PORT ?? String(Number(apiPort) + 40);
 if (testMode) {
   env.STAPLR_TEST_GITHUB_API_URL ??= `http://127.0.0.1:${fakePort}/github`;
   env.STAPLR_TEST_ANTHROPIC_API_URL ??= `http://127.0.0.1:${anthropicPort}`;
+  env.STAPLR_TEST_CLAUDE_PRICING_URL ??= `http://127.0.0.1:${anthropicPort}/pricing/claude.md`;
+  env.STAPLR_TEST_OPENAI_PRICING_URL ??= `http://127.0.0.1:${anthropicPort}/pricing/codex.md`;
   // Codex sign-in runs in the stub image (npm run sandbox:build -- stub), never the real CLI.
   env.STAPLR_CODEX_PROFILE ??= 'stub';
 }

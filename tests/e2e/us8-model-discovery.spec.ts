@@ -98,3 +98,51 @@ test('shows an error with Retry when the model list cannot load', async ({
   await expect(codex.getByRole('button', { name: /Retry/ })).toBeVisible();
   await axeCheck(page);
 });
+
+test('prices come from the official pages and are shown beside each model', async ({
+  page,
+}) => {
+  await signInAsOwner(page);
+  // there is no separate prices screen any more
+  await expect(
+    page
+      .getByRole('navigation', { name: 'Main' })
+      .getByRole('link', { name: 'Prices' }),
+  ).toHaveCount(0);
+
+  await page.goto('/settings/providers');
+  const prices = page.getByRole('region', { name: 'Model prices' });
+  await expect(prices.getByText('Claude prices last updated')).toBeVisible();
+  await expect(prices.getByText('Codex prices last updated')).toBeVisible();
+  await prices.getByRole('button', { name: 'Refresh prices' }).click();
+  await expect(page.getByRole('status')).toContainText(
+    'Prices refreshed from the official pages.',
+    { timeout: 45000 },
+  );
+  await axeCheck(page);
+
+  await page.goto('/agents/new');
+  await choose(page, 'Provider', 'Codex');
+  await choose(page, 'Connection', 'Discovery Codex');
+  const models = page.getByRole('region', {
+    name: 'Models for this connection',
+  });
+  const astra = models.getByRole('listitem').filter({ hasText: 'Astra' });
+  await expect(astra).toContainText(
+    'List price used for estimates: $10.00 in / $50.00 out per 1M tokens',
+  );
+  await expect(astra).toContainText(
+    'API list price; your plan may not charge per token',
+  );
+  await expect(
+    astra.getByRole('link', { name: /official price page/ }),
+  ).toHaveAttribute(
+    'href',
+    'https://developers.openai.com/api/docs/pricing.md',
+  );
+  // a model the official page does not list
+  await expect(
+    models.getByRole('listitem').filter({ hasText: 'Stub gpt-e2e-new' }),
+  ).toContainText('List price used for estimates: Unknown');
+  await axeCheck(page);
+});

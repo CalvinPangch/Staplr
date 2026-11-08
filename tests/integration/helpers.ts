@@ -95,6 +95,8 @@ export async function platformFixture(
     env: {
       STAPLR_TEST_GITHUB_API_URL: fake.githubApiUrl,
       STAPLR_TEST_ANTHROPIC_API_URL: anthropic.url,
+      STAPLR_TEST_CLAUDE_PRICING_URL: anthropic.pricingUrls.claude,
+      STAPLR_TEST_OPENAI_PRICING_URL: anthropic.pricingUrls.codex,
       STAPLR_CODEX_PROFILE: 'stub',
       DATA_DIR: dataDir,
     },

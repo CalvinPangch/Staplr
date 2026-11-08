@@ -81,12 +81,17 @@ describe('estimateCost', () => {
   });
 
   const put = (input: string, output: string) =>
-    prices.setPrice({
-      provider: 'claude',
-      model: 'claude-sonnet-5-5',
-      inputPricePerMTok: input,
-      outputPricePerMTok: output,
-    });
+    prices.applyOfficialPrices(
+      'claude',
+      [
+        {
+          model: 'claude-sonnet-5-5',
+          inputPricePerMTok: input,
+          outputPricePerMTok: output,
+        },
+      ],
+      new Date(now).toISOString(),
+    );
 
   it('uses the list price in effect at the run time', () => {
     put('2', '10');

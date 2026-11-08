@@ -515,25 +515,8 @@ paths:
   # ---------- Prices (FR-037..039) ----------
   /api/model-prices:
     get:
-      summary: Current prices and history
+      summary: Current prices and history (read-only; prices come from the official pages, feature 002)
       responses: { '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/ModelPrice' } } } } } }
-    post:
-      summary: Set a new price (closes the current row; effective now)
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [provider, model, inputPricePerMTok, outputPricePerMTok]
-              properties:
-                provider: { $ref: '#/components/schemas/Provider' }
-                model: { type: string }
-                inputPricePerMTok: { type: string, pattern: '^\d+(\.\d{1,6})?$' }
-                outputPricePerMTok: { type: string, pattern: '^\d+(\.\d{1,6})?$' }
-      responses:
-        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/ModelPrice' } } } }
-        '422': { $ref: '#/components/responses/Problem' }
 
   /api/prices/status:
     get:

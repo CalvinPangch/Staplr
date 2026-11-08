@@ -20,6 +20,10 @@ const env = {
   PUBLIC_URL: `http://localhost:${port}`,
   STAPLR_MASTER_KEY: randomBytes(32).toString('base64'),
   SESSION_SECRET: randomBytes(32).toString('hex'),
+  // Tests never read the live pricing pages; a closed local port reads as unreachable.
+  STAPLR_TEST_MODE: '1',
+  STAPLR_TEST_CLAUDE_PRICING_URL: 'http://127.0.0.1:9/pricing/claude.md',
+  STAPLR_TEST_OPENAI_PRICING_URL: 'http://127.0.0.1:9/pricing/codex.md',
 };
 
 const child = spawn(process.execPath, ['dist/server/main.js'], {
