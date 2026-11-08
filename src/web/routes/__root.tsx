@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   Link,
   Outlet,
@@ -6,13 +6,15 @@ import {
   useRouterState,
   type ErrorComponentProps,
 } from '@tanstack/react-router';
-import { useQueryClient } from '@tanstack/react-query';
-import { api, errorMessage } from '../lib/api';
-import { readTheme, saveTheme, type ThemeChoice } from '../lib/theme';
+import { errorMessage } from '../lib/api';
+import { useMediaQuery } from '../lib/useMediaQuery';
 import { Button } from '../components/ui/Button';
 import { PageBody, PageHeader } from '../components/ui/PageHeader';
 import { Brand, Sidebar } from '../components/ui/nav/Sidebar';
 import { TabBar } from '../components/ui/nav/TabBar';
+import { TopBar } from '../components/ui/nav/TopBar';
+import { SidebarPanel } from '../components/ui/nav/SidebarPanel';
+import { ThemeSelect } from '../components/ui/nav/AccountControls';
 
 const publicPaths = ['/setup', '/sign-in'];
 const localHosts = ['localhost', '127.0.0.1', '[::1]'];
@@ -33,50 +35,25 @@ function InsecureBanner() {
   );
 }
 
-export function ThemeSelect() {
-  const [choice, setChoice] = useState<ThemeChoice>(readTheme);
-  return (
-    <label className="flex items-center gap-2 text-secondary">
-      Theme
-      <select
-        value={choice}
-        onChange={(event) => {
-          const next = event.target.value as ThemeChoice;
-          setChoice(next);
-          saveTheme(next);
-        }}
-        className="min-h-11 rounded-control border border-control bg-surface px-2 text-fg"
-      >
-        <option value="system">System</option>
-        <option value="light">Light</option>
-        <option value="dark">Dark</option>
-      </select>
-    </label>
-  );
-}
+export {
+  SignOutButton,
+  ThemeSelect,
+} from '../components/ui/nav/AccountControls';
 
-export function SignOutButton() {
-  const router = useRouter();
-  const queryClient = useQueryClient();
-  const [busy, setBusy] = useState(false);
-  return (
-    <Button
-      variant="secondary"
-      busy={busy}
-      onClick={async () => {
-        setBusy(true);
-        try {
-          await api('/api/session', { method: 'DELETE' });
-        } finally {
-          queryClient.clear();
-          await router.navigate({ to: '/sign-in' });
-          setBusy(false);
-        }
-      }}
-    >
-      Sign out
-    </Button>
-  );
+const sidebarKey = 'staplr-sidebar';
+function readCollapsed() {
+  try {
+    return localStorage.getItem(sidebarKey) === 'collapsed';
+  } catch {
+    return false;
+  }
+}
+function saveCollapsed(collapsed: boolean) {
+  try {
+    localStorage.setItem(sidebarKey, collapsed ? 'collapsed' : 'expanded');
+  } catch {
+    // a per-browser convenience only; without storage it is simply not kept
+  }
 }
 
 export function AppShell() {
@@ -110,14 +87,49 @@ export function AppShell() {
     <>
       {skip}
       <InsecureBanner />
-      <div className="shell">
-        <Sidebar />
+      <WorkspaceShell />
+    </>
+  );
+}
+
+/**
+ * The AdminLTE layout (feature 004): the dark sidebar from 1024 px (or the
+ * slide-in panel below that), the sticky top navigation bar, the page, and the
+ * tab bar on phones.
+ */
+function WorkspaceShell() {
+  const wide = useMediaQuery('(min-width: 1024px)');
+  const [collapsed, setCollapsed] = useState(readCollapsed);
+  const [panelOpen, setPanelOpen] = useState(false);
+  const closePanel = useCallback((open: boolean) => setPanelOpen(open), []);
+  const menuButton = useRef<HTMLButtonElement>(null);
+  return (
+    <div className="shell" data-sidebar={collapsed ? 'collapsed' : 'expanded'}>
+      {wide && <Sidebar collapsed={collapsed} />}
+      <div className="shell-content">
+        <TopBar
+          buttonRef={menuButton}
+          expanded={wide ? !collapsed : panelOpen}
+          controls={wide ? 'sidebar' : 'sidebar-panel'}
+          onToggle={() => {
+            if (!wide) return setPanelOpen(true);
+            setCollapsed(!collapsed);
+            saveCollapsed(!collapsed);
+          }}
+        />
         <main id="main" tabIndex={-1} className="shell-main px-4 pb-8 md:px-8">
           <Outlet />
         </main>
-        <TabBar />
       </div>
-    </>
+      {!wide && (
+        <SidebarPanel
+          open={panelOpen}
+          onOpenChange={closePanel}
+          returnFocusTo={menuButton}
+        />
+      )}
+      <TabBar />
+    </div>
   );
 }
 

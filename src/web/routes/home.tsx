@@ -7,9 +7,9 @@ import {
   CircleX,
   FolderKanban,
   Plug,
-  type LucideIcon,
 } from 'lucide-react';
 import { Card } from '../components/ui/Card';
+import { StatTile } from '../components/ui/StatTile';
 import { DataState } from '../components/ui/DataState';
 import { PageBody, PageHeader } from '../components/ui/PageHeader';
 import { useAgents } from '../features/agents/api';
@@ -18,43 +18,7 @@ import { useProjects } from '../features/projects/api';
 import { useProviderConnections } from '../features/providers/api';
 import { useConnections } from '../features/source-control/api';
 
-function Summary({
-  to,
-  icon: Icon,
-  title,
-  count,
-  detail,
-}: {
-  to: string;
-  icon: LucideIcon;
-  title: string;
-  count: number | null;
-  detail: string;
-}) {
-  return (
-    <li>
-      <Link
-        to={to}
-        data-card=""
-        className="flex min-h-16 items-center gap-4 rounded-card border border-separator bg-surface p-4 text-fg shadow-card transition-colors duration-150 hover:border-accent"
-      >
-        <span
-          aria-hidden="true"
-          className="grid size-12 shrink-0 place-items-center rounded-control bg-accent-soft text-accent"
-        >
-          <Icon className="size-6" />
-        </span>
-        <span className="flex min-w-0 flex-1 flex-col">
-          <span className="font-semibold">{title}</span>
-          <span className="text-secondary text-muted">
-            {count === null ? 'Loading…' : detail}
-          </span>
-        </span>
-        <ChevronRight aria-hidden="true" className="size-5 text-muted" />
-      </Link>
-    </li>
-  );
-}
+const count = (n: number | undefined) => (n === undefined ? '…' : String(n));
 
 export function HomePage() {
   const agents = useAgents();
@@ -78,10 +42,59 @@ export function HomePage() {
     <>
       <PageHeader
         title="Home"
-        description="What needs your attention first, then your workspace at a glance."
+        description="Your workspace at a glance, then what needs your attention."
       />
       <PageBody>
-        <section aria-label="Needs attention" className="flex flex-col gap-3">
+        <section aria-label="Overview">
+          <ul className="m-0 grid list-none gap-4 p-0 sm:grid-cols-2 lg:grid-cols-4">
+            <StatTile
+              label="Projects"
+              value={count(projects.data?.length)}
+              icon={FolderKanban}
+              tone="accent"
+              to="/projects"
+              moreLabel="projects"
+            />
+            <StatTile
+              label="Agents ready"
+              value={
+                agents.data ? `${ready.length} of ${agents.data.length}` : '…'
+              }
+              icon={Bot}
+              tone="progress"
+              to="/agents"
+              moreLabel="agents"
+            />
+            <StatTile
+              label="Connections"
+              value={
+                providers.data && sourceControl.data ? String(connections) : '…'
+              }
+              icon={Plug}
+              tone="accent"
+              to="/settings/providers"
+              moreLabel="connections"
+            />
+            <StatTile
+              label="Needs attention"
+              value={loading ? '…' : String(items.length)}
+              icon={CircleAlert}
+              tone={
+                items.some((i) => i.severity === 'failed')
+                  ? 'failed'
+                  : 'attention'
+              }
+              to="/"
+              hash="needs-attention"
+              moreLabel="what needs attention"
+            />
+          </ul>
+        </section>
+        <section
+          id="needs-attention"
+          aria-label="Needs attention"
+          className="flex scroll-mt-16 flex-col gap-3"
+        >
           <h2>Needs attention</h2>
           <DataState
             what="your workspace"
@@ -141,32 +154,6 @@ export function HomePage() {
               </ul>
             )}
           </DataState>
-        </section>
-        <section aria-label="Workspace" className="flex flex-col gap-3">
-          <h2>Workspace</h2>
-          <ul className="m-0 grid list-none gap-3 p-0 md:grid-cols-3">
-            <Summary
-              to="/projects"
-              icon={FolderKanban}
-              title="Projects"
-              count={projects.data?.length ?? null}
-              detail={`${projects.data?.length ?? 0} ${projects.data?.length === 1 ? 'project' : 'projects'}`}
-            />
-            <Summary
-              to="/agents"
-              icon={Bot}
-              title="Agents"
-              count={agents.data?.length ?? null}
-              detail={`${ready.length} of ${agents.data?.length ?? 0} ready`}
-            />
-            <Summary
-              to="/settings/providers"
-              icon={Plug}
-              title="Connections"
-              count={providers.data && sourceControl.data ? connections : null}
-              detail={`${connections} ${connections === 1 ? 'connection' : 'connections'}`}
-            />
-          </ul>
         </section>
       </PageBody>
     </>

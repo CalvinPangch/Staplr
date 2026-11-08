@@ -1,3 +1,4 @@
+import { Card } from '../../components/ui/Card';
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
@@ -193,16 +194,12 @@ export function ProviderCard({
   const affected = impact ? impact.agents.length + impact.projects.length : 0;
 
   return (
-    <li
-      data-card=""
-      className="flex flex-col gap-4 rounded-card border border-separator bg-surface p-4 shadow-card md:p-6"
+    <Card
+      as="li"
+      title={connection.name}
+      tools={<StatusBadge status={connection.status} />}
+      className="flex flex-col gap-4"
     >
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="break-all text-section font-semibold">
-          {connection.name}
-        </h2>
-        <StatusBadge status={connection.status} />
-      </div>
       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-secondary">
         <dt className="text-muted">Provider</dt>
         <dd>{providerName[connection.provider]}</dd>
@@ -326,6 +323,6 @@ export function ProviderCard({
           </div>
         )}
       </ConfirmDialog>
-    </li>
+    </Card>
   );
 }

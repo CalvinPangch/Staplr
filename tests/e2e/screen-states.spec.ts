@@ -268,7 +268,7 @@ test.describe('shared states on every list screen', () => {
     {
       path: '/settings/source-control',
       api: '**/api/source-control-connections',
-      what: 'connections',
+      what: 'source control connections',
     },
   ];
 
@@ -318,7 +318,9 @@ test.describe('shared states on every list screen', () => {
         await route.continue();
       });
       await page.goto(screen.path);
-      await expect(page.locator('main [data-state="loading"]')).toBeVisible();
+      await expect(
+        page.getByRole('status').filter({ hasText: `Loading ${screen.what}` }),
+      ).toBeVisible();
       await page.unroute(screen.api);
     });
 });

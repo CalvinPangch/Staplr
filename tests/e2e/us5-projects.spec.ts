@@ -98,10 +98,18 @@ test('prepares a repository host, a Claude connection and agents', async ({
 });
 
 test('starts with an empty project list', async ({ page }) => {
+  // Specs that run earlier share this installation and may add projects, so
+  // show an installation with none.
+  await page.route('**/api/projects', (route) => route.fulfill({ json: [] }));
   await signInAsOwner(page);
-  await page.getByRole('link', { name: 'Projects' }).click();
+  await page
+    .getByRole('navigation', { name: 'Main' })
+    .getByRole('link', { name: 'Projects', exact: true })
+    .click();
   await expect(page).toHaveURL(/\/projects$/);
-  await expect(page.getByText('No projects yet.')).toBeVisible();
+  await expect(
+    page.getByRole('main').getByText('No projects yet.'),
+  ).toBeVisible();
   await axeCheck(page);
 });
 
@@ -206,9 +214,9 @@ test('builds the team: PM required, second PM blocked with replace, Ready', asyn
   ).toBeVisible();
   await expect(
     page
-      .getByRole('heading', { name: 'Shop', level: 1 })
-      .locator('..')
-      .getByText('Ready'),
+      .locator('main > header')
+      .filter({ has: page.getByRole('heading', { name: 'Shop', level: 1 }) })
+      .getByText('Ready', { exact: true }),
   ).toBeVisible();
   await axeCheck(page);
 });
@@ -300,7 +308,9 @@ test('deletes a project after a confirmation that says what goes and what stays'
   await axeCheck(page);
   await dialog.getByRole('button', { name: 'Delete project' }).click();
   await expect(page).toHaveURL(/\/projects$/);
-  await expect(page.getByText('No projects yet.')).toBeVisible();
+  await expect(
+    page.getByRole('main').getByText('No projects yet.'),
+  ).toBeVisible();
   // the agents are kept
   await page.goto('/agents');
   await expect(card(page, 'Coder')).toBeVisible();

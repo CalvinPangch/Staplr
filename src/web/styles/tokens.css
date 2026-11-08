@@ -15,7 +15,7 @@
   --c-bar: rgb(245 245 247 / 92%);
   /* text and lines */
   --c-fg: #1d1d1f;
-  --c-muted: #6e6e73;
+  --c-muted: #68686d;
   --c-separator: #d2d2d7;
   --c-control: #8e8e93;
   /* the one accent: actions, links, current item, selection, focus */
@@ -35,6 +35,23 @@
   --c-status-neutral-soft: #ffffff;
   --c-on-failed: #ffffff;
   --shadow-card: 0 1px 2px rgb(0 0 0 / 6%);
+
+  /*
+   * AdminLTE parts, the same in both themes (never redefined below): the dark
+   * frosted sidebar with its own text colours, and the solid stat tiles on
+   * Home with white text.
+   */
+  --c-sidebar: rgb(30 34 40 / 94%);
+  --c-sidebar-solid: #1e2228;
+  --c-sidebar-fg: #f2f4f7;
+  --c-sidebar-muted: #b4bac4;
+  --c-sidebar-accent: #5bd38a;
+  --c-sidebar-current: #24402f;
+  --c-sidebar-line: #3a404a;
+  --c-tile-accent: #176b47;
+  --c-tile-progress: #1f5fbf;
+  --c-tile-attention: #8a4b00;
+  --c-tile-failed: #c41e1e;
 
   /* type scale: the only five text sizes in the app */
   --fs-title: 1.75rem;

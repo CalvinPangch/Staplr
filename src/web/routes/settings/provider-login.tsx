@@ -189,6 +189,10 @@ export function ProviderLoginPage() {
     <>
       <PageHeader
         title="Sign in to Codex"
+        breadcrumbs={[
+          { label: 'Settings', to: '/settings' },
+          { label: 'Providers', to: '/settings/providers' },
+        ]}
         description="Finish the Codex sign-in in the terminal below; it runs in an isolated sandbox."
         action={finished && <StatusBadge status={finished.status} />}
       />

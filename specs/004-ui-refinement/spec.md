@@ -1,4 +1,4 @@
-# Feature Specification: A Modern, Apple-Style Staplr with a Green Accent
+# Feature Specification: An AdminLTE-Style Staplr with Apple-Style Details and a Green Accent
 
 **Feature Branch**: `004-ui-refinement`
 
@@ -17,9 +17,11 @@ the most important thing on each screen does not always stand out. This feature 
 and makes every screen feel like one calm product, so the owner finds what matters on each screen
 at a glance. Nothing about what Staplr does changes; only how it looks and reads.
 
-The look follows Apple's design patterns (as in macOS and iOS apps): neutral, quiet surfaces,
-clear type hierarchy, generous spacing, rounded shapes, and one tint colour for everything the owner
-can act on. Staplr's green becomes that tint.
+The layout follows the AdminLTE admin template: a dark sidebar with the brand at the top, a top
+navigation bar with a menu toggle, a page title row with breadcrumbs, cards with a header bar, and
+coloured stat tiles on Home. The details follow Apple's design patterns: neutral, quiet content
+surfaces, frosted glass on the bars, the Inter typeface, soft rounded cards, and one tint colour for
+everything the owner can act on. Staplr's green becomes that tint.
 
 ## Clarifications
 
@@ -32,7 +34,8 @@ can act on. Staplr's green becomes that tint.
 - Q: Should the sidebar and the top bar of each page use Apple-style translucent "frosted glass"
   backgrounds? → A: Yes (Option A): frosted glass on the sidebar and the sticky page header only;
   solid everywhere else; solid fallback when the system asks for reduced transparency or more
-  contrast.
+  contrast. (Refined 2026-11-09: with the AdminLTE layout the frosted bars are the dark sidebar, the
+  top navigation bar and the phone tab bar; the page title row is solid.)
 - Q: On a phone, should navigation move to an Apple-style tab bar at the bottom instead of a
   collapsing sidebar menu? → A: Yes (Option A): a bottom tab bar on small screens (Home, Projects,
   Agents, Settings; at most 5 items, each with text and an icon); the sidebar on wider screens.
@@ -40,6 +43,23 @@ can act on. Staplr's green becomes that tint.
   (Option B): keep a separate card per item everywhere, restyled in the Apple manner.
 - Q: Should Staplr bundle the Inter typeface (self-hosted) or keep each device's system font? → A:
   Bundle Inter (Option A), served by Staplr itself, for the same SF-like look on every device.
+
+### Session 2026-11-09
+
+- Q: Should the AdminLTE look replace the Apple-style direction recorded earlier, or be combined
+  with it? → A: Combine (Option B): AdminLTE's layout (dark sidebar with brand, top navigation bar
+  with a menu toggle, page title row with breadcrumbs, cards with a header bar, coloured stat tiles
+  on Home) with the Apple-style details already chosen (neutral content surfaces, frosted bars,
+  Inter, soft rounded cards, bottom tab bar on phones). Green stays the single accent.
+- Q: Should the sidebar stay dark in the light theme as well? → A: Yes (Option A): the sidebar is
+  dark in both themes (AdminLTE default); the content area follows the theme.
+- Q: On phones, should the menu toggle also open the sidebar as a slide-in panel alongside the
+  bottom tab bar? → A: Yes (Option A): the tab bar holds the three places; the menu toggle opens the
+  dark sidebar as a slide-in panel with the project list, keeping focus inside while open and
+  closing on Escape, a tap outside, or choosing a link.
+- Owner decision (2026-11-09, during implementation): the main navigation has three places — Home,
+  Projects, Settings. Agents is reached from Settings (and from Home's tiles and team rosters);
+  breadcrumbs show it as Home › Settings › Agents.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -69,8 +89,12 @@ of them.
 3. **Given** buttons on any screen, **When** the owner looks for the main action, **Then** there is
    at most one primary button per area; secondary and destructive actions look distinct from it
    and from each other the same way everywhere.
-4. **Given** the sidebar, **When** the owner moves between screens, **Then** it shows the current
-   screen highlighted in the green accent, on a neutral background that matches the page headers.
+4. **Given** the dark sidebar, **When** the owner moves between screens, **Then** it shows the
+   brand at the top and the current screen highlighted in the green accent; the top navigation bar
+   and the page title row with breadcrumbs stay the same on every screen.
+5. **Given** a wide screen, **When** the owner presses the menu toggle in the top navigation bar,
+   **Then** the sidebar collapses to icons only (each keeping its name for screen readers and as a
+   tooltip) and expands again; the choice is remembered.
 
 ---
 
@@ -137,12 +161,15 @@ passes on each.
 **Acceptance Scenarios**:
 
 1. **Given** a 320 px wide screen, **When** the owner opens any page, **Then** navigation is a tab
-   bar fixed at the bottom (Home, Projects, Agents, Settings, each with text and an icon, the
+   bar fixed at the bottom (Home, Projects, Settings, each with text and an icon, the
    current one in the green accent), content uses the full width above it, and nothing scrolls
    sideways (the board may scroll its columns, as it does today).
-2. **Given** dark mode, **When** the owner opens any page, **Then** every text and control meets
+2. **Given** a phone, **When** the owner taps the menu toggle in the top navigation bar, **Then**
+   the dark sidebar slides in with the three places and the project list; Escape, a tap outside or
+   choosing a link closes it and focus returns to the toggle.
+3. **Given** dark mode, **When** the owner opens any page, **Then** every text and control meets
    WCAG 2.2 AA contrast and status labels stay distinguishable.
-3. **Given** a keyboard user, **When** they move through any page, **Then** focus is always
+4. **Given** a keyboard user, **When** they move through any page, **Then** focus is always
    visible and follows the visual order.
 
 ### Edge Cases
@@ -154,11 +181,15 @@ passes on each.
 - The owner has chosen the light or dark theme explicitly: the choice is kept; otherwise the system
   setting is followed, as today.
 - Reduced motion: any new transitions are turned off when the system asks for reduced motion.
-- Reduced transparency or increased contrast: the frosted sidebar and header become solid.
+- Reduced transparency or increased contrast: the frosted sidebar, top navigation bar and tab bar become solid.
 - On a phone, the on-screen keyboard is open (for example in the agent file editor): the bottom tab
   bar does not cover the field being edited.
-- Content scrolling under the frosted header: text behind it never reduces the header's own text
-  below WCAG 2.2 AA contrast.
+- Content scrolling under the frosted top navigation bar: text behind it never reduces the bar's
+  own text below WCAG 2.2 AA contrast.
+- The sidebar is collapsed to icons: each item still has its name for screen readers and as a
+  tooltip, and the current item is still marked.
+- A page deep in the app (an agent, a project): the breadcrumbs show the path back (Home › Settings ›
+  Agents › Dev Agent) and each earlier step is a link.
 - A screen with both an error and data (for example a failed refresh): the old data stays visible
   with the error shown above it.
 - Text zoomed to 200%: content reflows without loss of information or function.
@@ -169,11 +200,13 @@ passes on each.
 
 **Identity**
 
-- **FR-001**: Surfaces MUST be neutral in the Apple manner: white and light grey grouped backgrounds
-  in the light theme, near-black and dark grey in the dark theme. Staplr's green MUST be the single
-  accent (tint) colour, used for primary buttons, links, the current navigation item, selection and
-  focus, and nowhere else. The sidebar workspace navigation and the light and dark themes stay;
-  status colours are separate from the accent and keep their meanings.
+- **FR-001**: Content surfaces MUST be neutral in the Apple manner: white and light grey grouped
+  backgrounds in the light theme, near-black and dark grey in the dark theme. The sidebar MUST be
+  dark in both themes, as in AdminLTE, with its own text, icon and current-item colours that meet
+  WCAG 2.2 AA on it. Staplr's green MUST be the single accent (tint) colour, used
+  for primary buttons, links, the current navigation item, selection and focus; the only other use
+  is one of the Home stat tiles (FR-010a). Status colours are separate from the accent and keep
+  their meanings.
 - **FR-002**: The redesign MUST NOT change what any screen does, which data it shows, or the words
   of existing actions, except where this specification asks for clearer wording or order.
 - **FR-003**: All fonts, icons and images MUST be served by Staplr itself; no screen may load
@@ -181,10 +214,11 @@ passes on each.
 
 **Shared building blocks**
 
-- **FR-003a**: The sidebar and the page header MUST use a translucent, blurred (frosted glass)
-  background, with the page header staying at the top while the page scrolls. All other surfaces
-  (content, cards, lists, dialogs, menus) MUST be solid. When the system asks for reduced
-  transparency or increased contrast, the sidebar and header MUST become solid; text on them MUST
+- **FR-003a**: The sidebar, the top navigation bar and the phone tab bar MUST use a translucent,
+  blurred (frosted glass) background (dark for the sidebar), with the top navigation bar staying at
+  the top while the page scrolls. All other surfaces (content, page title row, cards, lists, dialogs,
+  menus) MUST be solid. When the system asks for reduced
+  transparency or increased contrast, the sidebar and bars MUST become solid; text on them MUST
   meet WCAG 2.2 AA in every case.
 
 - **FR-004**: Every screen MUST use one spacing scale and one type scale (large page title, section
@@ -193,13 +227,19 @@ passes on each.
   other host), with the device's system font as the fallback while it loads and if it cannot load;
   text MUST stay visible and readable while the font loads. Code and the agent file editor keep a
   monospaced font.
-- **FR-005**: Every signed-in screen MUST start with the shared page header: title, one-line
-  description, and the main action (if any) in the same position.
+- **FR-005**: Every signed-in screen MUST start with the shared page title row, as in AdminLTE:
+  breadcrumbs (Home › section › page) above the page title, a one-line description, and the main
+  action (if any) in the same position.
+- **FR-005a**: Every signed-in screen MUST show the shared top navigation bar: a menu toggle that
+  collapses the sidebar to icons on wide screens (remembered per browser) and opens it on narrower
+  ones, the current section's name, the theme choice and Sign out. Every control in it has a visible
+  label or an accessible name.
 - **FR-006**: Agents, connections, projects, settings entries, board tickets and Home's summaries
-  MUST each be shown as a separate card in one shared Apple-style card design: neutral solid
-  surface, generous rounded corners, a soft shadow or hairline border (not both heavy), comfortable
-  padding, the item's title, details, status label and actions in the same places on every card,
-  and the same spacing between cards on every screen.
+  MUST each be shown as a separate card in one shared design that joins AdminLTE's structure with
+  Apple-style softness: an optional card header bar (title on the left, small tools such as status
+  or actions on the right, separated by a hairline), a body, an optional footer for actions; neutral
+  solid surface, generous rounded corners, a soft shadow or hairline border (not both heavy), and the
+  same spacing between cards on every screen.
 - **FR-007**: Status labels MUST use one shared style with a fixed set of meanings (ready / good,
   needs attention, failed, in progress, neutral), each shown with words and an icon, never colour
   alone.
@@ -213,6 +253,10 @@ passes on each.
 - **FR-010**: Home MUST list what needs attention first (agents Not ready, connections needing
   re-login, projects failing to download, teams without a Project Manager), each linking to where it
   is fixed, and say plainly when nothing needs attention.
+- **FR-010a**: Home MUST show AdminLTE-style stat tiles above the attention list: Projects, Agents
+  ready (of total), Connections, and Needs attention (count), each with a large number, a label, an
+  icon and a "More info" link to its screen (for Needs attention, the attention list on Home). Tiles use solid colours (the green accent, and the
+  progress, attention and failed status colours) with text meeting WCAG 2.2 AA on them.
 - **FR-011**: Every list of agents, connections and projects MUST show each item's status and, when
   it needs attention, its reason on the item itself.
 - **FR-012**: Every detail screen MUST show status and the next step above secondary details.
@@ -226,10 +270,14 @@ passes on each.
   accessibility check.
 - **FR-015**: Every screen MUST work from 320 px wide to desktop without sideways scrolling (the
   board's columns excepted, as today).
-- **FR-015a**: On small screens, navigation MUST be a tab bar fixed at the bottom with at most 5
-  items (Home, Projects, Agents, Settings), each labelled with text and an icon, the current item
+- **FR-015a**: On phones (narrower than 768 px), navigation MUST be a tab bar fixed at the bottom with at most 5
+  items (Home, Projects, Settings; Agents is found under Settings), each labelled with text and an icon, the current item
   shown in the green accent, staying clear of the device's safe areas and never covering content.
   On wider screens the sidebar holds the same destinations.
+- **FR-015b**: On screens narrower than 1024 px (phones and tablets) the top navigation bar's menu toggle MUST open the dark sidebar as a
+  slide-in panel (the three places and the project list). While open it MUST keep keyboard focus
+  inside, be announced as a dialog with a name, and close on Escape, a tap outside, or choosing a
+  link, returning focus to the toggle.
 - **FR-016**: Any motion MUST be short, carry meaning, and be turned off when the system asks for
   reduced motion.
 - **FR-017**: All existing behaviour tests MUST keep passing; where a test depends on wording or
@@ -243,8 +291,8 @@ Not applicable: this feature changes presentation only; no data is added or chan
 
 ### Measurable Outcomes
 
-- **SC-001**: 100% of signed-in screens use the shared page header, status labels, buttons and
-  loading/empty/error layout (checked screen by screen).
+- **SC-001**: 100% of signed-in screens use the shared top navigation bar, page title row with
+  breadcrumbs, status labels, buttons and loading/empty/error layout (checked screen by screen).
 - **SC-002**: A first-time viewer finds every item that needs attention on Home within 10 seconds,
   in a test with one agent Not ready and one connection needing re-login.
 - **SC-003**: Every screen passes the automated accessibility check with zero violations in light
@@ -255,14 +303,15 @@ Not applicable: this feature changes presentation only; no data is added or chan
   distinct spacing values at most 8.
 - **SC-007**: No request leaves Staplr for fonts, icons or images (checked by the existing outbound
   traffic test), and Inter is served by Staplr on every screen.
+- **SC-008**: The board still shows 200 tickets within its existing performance target.
 - **SC-009**: Text is visible within the first paint of every screen, before the font has loaded
   (no invisible text while loading).
-- **SC-008**: The board still shows 200 tickets within its existing performance target.
 
 ## Assumptions
 
-- The sidebar and overall layout from commit 89acff3 stay; the green-tinted surfaces are replaced
-  by neutral ones, and green remains as Staplr's accent colour.
+- The layout follows AdminLTE (dark sidebar, top navigation bar, breadcrumbs, header-bar cards,
+  stat tiles) rebuilt with Staplr's own components and tokens; the AdminLTE package itself (and its
+  Bootstrap and jQuery dependencies) is not added. Green remains Staplr's accent colour.
 - The Inter typeface is bundled and served by Staplr (decided in clarification); its licence (SIL
   Open Font License) allows this. The added font files are kept small by loading only the weights
   used.

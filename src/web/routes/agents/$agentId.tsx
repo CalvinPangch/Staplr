@@ -171,6 +171,10 @@ function TemplatePicker({
     <>
       <PageHeader
         title="New agent"
+        breadcrumbs={[
+          { label: 'Settings', to: '/settings' },
+          { label: 'Agents', to: '/agents' },
+        ]}
         description="Choose a role to start from. You get the agent's Markdown file with that role's instructions, ready to name and connect."
       />
       <PageBody>
@@ -309,6 +313,10 @@ function Editor({ agent, initial }: { agent: Agent | null; initial: string }) {
     <>
       <PageHeader
         title={agent ? agent.name : 'New agent'}
+        breadcrumbs={[
+          { label: 'Settings', to: '/settings' },
+          { label: 'Agents', to: '/agents' },
+        ]}
         description={
           agent
             ? 'Its Markdown file: the settings header, then its instructions.'
@@ -365,8 +373,7 @@ function Editor({ agent, initial }: { agent: Agent | null; initial: string }) {
               serverProblems={serverProblems}
             />
           </Card>
-          <Card className="flex flex-col gap-4">
-            <h2 className="text-section">Connection and model</h2>
+          <Card title="Connection and model" className="flex flex-col gap-4">
             <p className="text-secondary text-muted">
               These helpers write into the header for you.
             </p>

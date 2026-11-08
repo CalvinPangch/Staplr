@@ -143,6 +143,61 @@ describe.each([
   });
 });
 
+/*
+ * The AdminLTE parts (research R1): the sidebar is dark and the stat tiles are
+ * solid in both themes, so their tokens live only in :root and the dark blocks
+ * never redefine them.
+ */
+describe('sidebar and stat tiles', () => {
+  const white = { r: 255, g: 255, b: 255, a: 1 };
+  const c = (token: string) => {
+    const value = light[token];
+    if (!value) throw new Error(`missing ${token}`);
+    return colour(value);
+  };
+  const sidebarTokens = [
+    '--c-sidebar',
+    '--c-sidebar-fg',
+    '--c-sidebar-muted',
+    '--c-sidebar-accent',
+    '--c-sidebar-current',
+  ];
+  const tiles = ['accent', 'progress', 'attention', 'failed'];
+
+  it('are the same in both themes', () => {
+    for (const token of [
+      ...sidebarTokens,
+      ...tiles.map((t) => `--c-tile-${t}`),
+    ]) {
+      expect(light[token], token).toBeDefined();
+      expect(dark[token], token).toBeUndefined();
+      expect(darkAuto[token], token).toBeUndefined();
+    }
+  });
+
+  it('keeps sidebar text at 4.5:1, even with the panel over a white page', () => {
+    const sidebar = c('--c-sidebar');
+    expect(sidebar.a).toBeGreaterThanOrEqual(0.94);
+    const worst = over(sidebar, white);
+    for (const fg of [
+      '--c-sidebar-fg',
+      '--c-sidebar-muted',
+      '--c-sidebar-accent',
+    ])
+      expect(ratio(c(fg), worst), fg).toBeGreaterThanOrEqual(4.5);
+    for (const fg of ['--c-sidebar-fg', '--c-sidebar-accent'])
+      expect(
+        ratio(c(fg), c('--c-sidebar-current')),
+        `${fg} on the current item`,
+      ).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('keeps white text at 4.5:1 on every stat tile', () => {
+    for (const t of tiles)
+      expect(ratio(white, c(`--c-tile-${t}`)), t).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
 describe('dark theme', () => {
   it('is the same whether chosen explicitly or by the system setting', () => {
     expect(darkAuto).toEqual(dark);

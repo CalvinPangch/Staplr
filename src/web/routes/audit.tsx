@@ -56,6 +56,7 @@ export function AuditPage() {
     <>
       <PageHeader
         title="Audit log"
+        breadcrumbs={[{ label: 'Settings', to: '/settings' }]}
         description="Changes to connections, agents and projects, newest first. Secret values are never recorded."
       />
       <PageBody>

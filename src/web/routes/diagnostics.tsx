@@ -25,6 +25,7 @@ export function DiagnosticsPage() {
     <>
       <PageHeader
         title="Diagnostics"
+        breadcrumbs={[{ label: 'Settings', to: '/settings' }]}
         description="Unexpected errors recorded on this installation, newest first (at most 200). Nothing is sent anywhere."
       />
       <PageBody>

@@ -1,17 +1,12 @@
-import {
-  Bot,
-  FolderKanban,
-  House,
-  Settings,
-  type LucideIcon,
-} from 'lucide-react';
+import { FolderKanban, House, Settings, type LucideIcon } from 'lucide-react';
 
 /**
- * The four top-level places (feature 004, FR-015a). The sidebar and the phone
- * tab bar show the same list; an Apple tab bar holds at most five.
+ * The top-level places (feature 004, FR-015a): Home, Projects and Settings;
+ * Agents lives under Settings (owner decision, 2026-11-09). The sidebar, the
+ * slide-in panel and the phone tab bar show the same list.
  */
 export interface NavItem {
-  to: '/' | '/projects' | '/agents' | '/settings';
+  to: '/' | '/projects' | '/settings';
   label: string;
   icon: LucideIcon;
   /** Paths that belong to this place, so it stays current on its sub-pages. */
@@ -29,11 +24,22 @@ export const navItems: NavItem[] = [
     icon: FolderKanban,
     match: under(['/projects']),
   },
-  { to: '/agents', label: 'Agents', icon: Bot, match: under(['/agents']) },
   {
     to: '/settings',
     label: 'Settings',
     icon: Settings,
-    match: under(['/settings', '/audit', '/diagnostics']),
+    match: under(['/settings', '/agents', '/audit', '/diagnostics']),
   },
 ];
+
+const sections: [string, string][] = [
+  ['/agents', 'Agents'],
+  ['/audit', 'Audit log'],
+  ['/diagnostics', 'Diagnostics'],
+];
+
+/** The name the top navigation bar shows for the current page. */
+export function sectionName(path: string): string {
+  for (const [prefix, name] of sections) if (under([prefix])(path)) return name;
+  return navItems.find((item) => item.match(path))?.label ?? 'Staplr';
+}

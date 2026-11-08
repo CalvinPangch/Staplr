@@ -94,3 +94,38 @@ test('Home says so when everything is ready', async ({ page }) => {
   await expect(page.getByText('Everything is ready.')).toBeVisible();
   await axeCheck(page);
 });
+
+test('Home shows stat tiles that lead to each place', async ({ page }) => {
+  await signInAsOwner(page);
+  await page.goto('/');
+  const overview = page.getByRole('region', { name: 'Overview' });
+  const tiles = overview.getByRole('listitem');
+  await expect(tiles).toHaveCount(4);
+  const expected: [string, RegExp, string | RegExp][] = [
+    ['Projects', /More info about projects/, '/projects'],
+    ['Agents ready', /More info about agents/, '/agents'],
+    ['Connections', /More info about connections/, '/settings/providers'],
+    [
+      'Needs attention',
+      /More info about what needs attention/,
+      /#needs-attention$/,
+    ],
+  ];
+  for (const [label, more, href] of expected) {
+    const tile = tiles.filter({ hasText: label });
+    await expect(tile).toHaveCount(1);
+    // a large number (or "N of M"), an icon and a More info link
+    await expect(tile).toContainText(/\d/);
+    await expect(tile.locator('svg').first()).toBeAttached();
+    await expect(tile.getByRole('link', { name: more })).toHaveAttribute(
+      'href',
+      href,
+    );
+  }
+  await expect(tiles.filter({ hasText: 'Agents ready' })).toContainText(
+    /\d+ of \d+/,
+  );
+  // the attention list the last tile points to
+  await expect(page.locator('#needs-attention')).toBeVisible();
+  await axeCheck(page);
+});

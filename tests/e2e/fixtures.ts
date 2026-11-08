@@ -96,7 +96,10 @@ export async function signInAsOwner(page: Page) {
     await page.getByLabel('Password', { exact: true }).fill(owner.password);
     await page.getByRole('button', { name: 'Sign in' }).click();
   }
-  await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible();
+  // signed in: the top navigation bar's menu button is there at every width
+  await expect(
+    page.getByRole('banner').getByRole('button', { name: 'Menu' }),
+  ).toBeVisible();
 }
 
 export { test, expect } from '@playwright/test';

@@ -29,7 +29,8 @@ async function openAgents(page: Page) {
     .getByRole('navigation', { name: 'Main' })
     .getByRole('link', { name: 'Settings' })
     .click();
-  await page.getByRole('link', { name: 'Agents' }).click();
+  await expect(page).toHaveURL(/\/settings$/);
+  await page.getByRole('link', { name: 'Agents', exact: true }).click();
   await expect(page).toHaveURL(/\/agents$/);
   await expect(
     page.getByRole('heading', { name: 'Agents', level: 1 }),
@@ -72,8 +73,13 @@ async function addCodexConnection(page: Page, name: string, line = 'OK') {
 }
 
 test('starts empty and explains what to do', async ({ page }) => {
+  // Specs that run earlier share this installation and add agents, so show an
+  // installation with none.
+  await page.route('**/api/agents', (route) => route.fulfill({ json: [] }));
   await openAgents(page);
-  await expect(page.getByText('No agents yet.')).toBeVisible();
+  await expect(
+    page.getByRole('main').getByText('No agents yet.'),
+  ).toBeVisible();
   await axeCheck(page);
 });
 

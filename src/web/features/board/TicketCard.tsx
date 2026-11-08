@@ -27,6 +27,7 @@ export function TicketCardView({
 }) {
   return (
     <div
+      data-card=""
       className={cn(
         'flex flex-col gap-2 rounded-card border border-separator bg-surface p-3 shadow-card',
         dragging && 'shadow-lg ring-2 ring-accent',

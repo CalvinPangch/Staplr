@@ -65,6 +65,7 @@ export function ProvidersPage() {
     <>
       <PageHeader
         title="Providers"
+        breadcrumbs={[{ label: 'Settings', to: '/settings' }]}
         description="Claude with your own Anthropic API key, or Codex with your own account. Re-checked every hour."
         action={
           <div className="flex flex-wrap gap-2">

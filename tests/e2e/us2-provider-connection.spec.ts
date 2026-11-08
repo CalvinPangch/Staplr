@@ -53,8 +53,15 @@ async function typeInTerminal(page: Page, text: string) {
 }
 
 test('starts empty and explains what to add', async ({ page }) => {
+  // Specs that run earlier share this installation and add connections, so
+  // show an installation with none.
+  await page.route('**/api/provider-connections', (route) =>
+    route.fulfill({ json: [] }),
+  );
   await openProviders(page);
-  await expect(page.getByText('No provider connections yet.')).toBeVisible();
+  await expect(
+    page.getByRole('main').getByText('No provider connections yet.'),
+  ).toBeVisible();
   await axeCheck(page);
 });
 

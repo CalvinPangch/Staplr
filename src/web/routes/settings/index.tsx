@@ -10,7 +10,6 @@ import {
 } from 'lucide-react';
 import { Card } from '../../components/ui/Card';
 import { PageBody, PageHeader } from '../../components/ui/PageHeader';
-import { SignOutButton, ThemeSelect } from '../__root';
 
 const sections: {
   to: string;
@@ -97,16 +96,11 @@ export function SettingsPage() {
             })}
           </ul>
         </section>
-        <section
-          aria-labelledby="settings-account"
-          className="flex flex-col gap-3"
-        >
-          <h2 id="settings-account">Preferences and account</h2>
-          <Card className="flex flex-wrap items-center justify-between gap-4">
-            <ThemeSelect />
-            <SignOutButton />
-          </Card>
-        </section>
+        <Card title="Preferences and account">
+          <p className="text-body text-fg">
+            Theme and Sign out are in the top bar.
+          </p>
+        </Card>
       </PageBody>
     </>
   );

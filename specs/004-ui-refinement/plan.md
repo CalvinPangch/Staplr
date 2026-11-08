@@ -1,36 +1,42 @@
-# Implementation Plan: A Modern, Apple-Style Staplr with a Green Accent
+# Implementation Plan: An AdminLTE-Style Staplr with Apple-Style Details and a Green Accent
 
-**Branch**: `004-ui-refinement` | **Date**: 2026-11-08 | **Spec**: [spec.md](./spec.md)
+**Branch**: `004-ui-refinement` | **Date**: 2026-11-09 (updated for the AdminLTE clarifications) |
+**Spec**: [spec.md](./spec.md)
 **Input**: Feature specification from `specs/004-ui-refinement/spec.md`
 
 ## Summary
 
-A presentation-only redesign. The tokens move to Apple-style neutral surfaces with Staplr's deep
-green as the single accent; the sidebar and a new sticky page header become frosted glass with a
-solid fallback; phones get a bottom tab bar; every item is an Apple-style card; text uses a bundled
-Inter variable font. A small set of shared components (page header, card, status badge, buttons,
-data states, navigation) is built or reworked first, then each screen is moved onto them. Home
-gains a "needs attention" list derived from data it can already read. No server, API or data
-changes.
+A presentation-only redesign with AdminLTE's layout and Apple-style details. The shell becomes a
+dark, frosted sidebar (collapsible to an icon rail, remembered per browser) with a sticky frosted top
+navigation bar; below 1024 px the sidebar opens as an accessible slide-in panel, and phones also get
+a bottom tab bar. Every screen starts with a solid page title row with breadcrumbs; content uses soft
+cards with optional header and footer bars; Home gains AdminLTE stat tiles above the "needs
+attention" list. Content surfaces stay neutral, green is the single accent, text uses bundled Inter.
+Much of the foundation is already built (tokens, shared components, Home attention list, tab bar);
+the remaining work is the shell, breadcrumbs, card header bars and stat tiles. No server, API or
+data changes.
 
 ## Technical Context
 
 **Language/Version**: TypeScript 5 (strict), React 19 (unchanged)
-**Primary Dependencies**: Tailwind CSS 4, Radix UI, TanStack Router/Query (unchanged); **new**:
-`@fontsource-variable/inter` 5.3.0 (OFL-1.1) and `lucide-react` 1.70.0 (ISC), both with no
-dependencies (research R3, R4)
-**Storage**: none changed
-**Testing**: Vitest (unit: token contrast, class-scale scan), Playwright + axe (every screen, light
-and dark, 1280 and 320 px, reduced transparency)
-**Target Platform**: modern browsers; Safari, Chrome, Edge, Firefox (backdrop-filter with fallback)
+**Primary Dependencies**: Tailwind CSS 4, Radix UI (Dialog used for the slide-in panel), TanStack
+Router/Query; added in this feature: `@fontsource-variable/inter` 5.3.0 (OFL-1.1) and
+`lucide-react` 1.70.0 (ISC), both without dependencies (research R3, R4). The AdminLTE package is
+**not** added (R7).
+**Storage**: none changed; the sidebar collapse choice is kept in `localStorage` (a per-browser
+convenience, read and written in try/catch)
+**Testing**: Vitest (token contrast incl. sidebar and tiles, scale scan, font loading, attention
+list), Playwright + axe (shell, breadcrumbs, slide-in panel focus rules, tab bar, stat tiles, every
+screen light/dark at 1280 and 320 px, reduced transparency)
+**Target Platform**: modern browsers (backdrop-filter with a solid fallback)
 **Project Type**: web application (React SPA served by the Fastify API)
-**Performance Goals**: board shows 200 tickets within the existing target (SC-008); added font
-≤ 60 KB (Latin subset); no layout shift when data or the font arrives
-**Constraints**: WCAG 2.2 AA in both themes and on frosted bars (worst-case contrast, R2); 320 px;
-no outbound requests; ≤ 5 text sizes, ≤ 8 spacing values
-**Scale/Scope**: 13 routes, 12 shared UI components, ~40 feature components
+**Performance Goals**: board shows 200 tickets within its existing target (SC-008); Latin Inter
+file 48 KB (measured); no layout shift when data or the font arrives
+**Constraints**: WCAG 2.2 AA in both themes, on the dark sidebar and on frosted bars in the worst
+case (R1, R2); 320 px; no outbound requests; ≤ 5 text sizes, ≤ 8 spacing values
+**Scale/Scope**: 13 routes, ~14 shared UI components, ~40 feature components
 
-No NEEDS CLARIFICATION remains; see [research.md](./research.md) R1–R10.
+No NEEDS CLARIFICATION remains; see [research.md](./research.md) R1–R14.
 
 ## Constitution Check
 
@@ -38,12 +44,12 @@ No NEEDS CLARIFICATION remains; see [research.md](./research.md) R1–R10.
 
 | Principle | How this design complies |
 |---|---|
-| I. Test-first | Before restyling: a unit test that parses `tokens.css` and asserts every listed text/background pair (4.5:1) and border/focus pair (3:1) in both themes; a unit test that scans class names for the type and spacing scales; e2e for the tab bar, frosted-bar fallback (emulated reduced transparency), Home attention list, and axe on every screen in both themes and widths. Each is seen failing first. Existing behaviour tests stay; wording changes in tests keep their intent (FR-017). |
-| II. Security & privacy | No server change. Font and icons are bundled and served by Staplr; the outbound-traffic test still allows only the existing hosts. No new data collected. |
-| III. Accessible UX | This feature is about Principle III: one design system of tokens and shared components; explicit loading, empty, error and success states; WCAG 2.2 AA verified numerically (R1, R2) and by axe; 320 px; focus visible; reduced motion and reduced transparency respected. |
-| IV. Simplicity | Two dependencies, each justified with alternatives (R3, R4); no CSS-in-JS, no component library swap; screens keep their logic and only change markup and classes. Shared components replace per-screen class lists, reducing code. |
-| V. Spec-driven | specify → clarify (5 answers) → plan → tasks. |
-| Operational | No migrations. Visual changes only; existing logging unaffected. |
+| I. Test-first | Before each remaining part: the token test is extended for the sidebar and tile colours; e2e for the top bar, sidebar collapse and memory, breadcrumbs, the slide-in panel (dialog name, focus inside, Escape, outside tap, focus return), stat tiles and links, each seen failing first. Parts built earlier keep their tests (contrast, scale, font, attention list, tab bar, states). Existing behaviour tests keep their intent (FR-017). |
+| II. Security & privacy | No server change; font and icons are bundled; no outbound requests (checked in the browser test). `localStorage` holds only the sidebar's collapsed state. No AdminLTE/Bootstrap/jQuery code is added. |
+| III. Accessible UX | One design system of tokens and shared components; the dark sidebar has its own AA colours; the slide-in panel uses a proven dialog for focus handling; breadcrumbs use the standard landmark pattern; icon-only (collapsed) items keep accessible names; loading/empty/error/success states explicit; reduced motion and transparency respected; 320 px. |
+| IV. Simplicity | Two small dependencies, justified (R3, R4); the AdminLTE look is rebuilt from existing components rather than importing a second CSS framework (R7); the slide-in panel reuses Radix Dialog already in the project. |
+| V. Spec-driven | specify → clarify (8 answers over two sessions) → plan → tasks. |
+| Operational | No migrations; presentation only. |
 
 No violations; Complexity Tracking is empty.
 
@@ -54,44 +60,43 @@ No violations; Complexity Tracking is empty.
 ```text
 specs/004-ui-refinement/
 ├── plan.md
-├── research.md
+├── research.md            # R1–R14 (R2, R7 rewritten; R11–R14 new on 2026-11-09)
 ├── data-model.md
 ├── quickstart.md
 ├── contracts/ui-system.md
 ├── checklists/requirements.md
-└── tasks.md            # created by /speckit-tasks
+└── tasks.md               # regenerated by /speckit-tasks
 ```
 
 ### Source Code (repository root)
 
 ```text
 src/web/
-├── index.html                       # viewport-fit=cover
-├── main.tsx                         # import Inter variable font
-├── styles/tokens.css                # R1 palette, R5 type, R6 space/shape, R8 motion, R2 bar
-├── styles/app.css                   # Tailwind theme mapping; shell, frosted bars, tab bar; old per-screen rules removed
+├── index.html, main.tsx                 # viewport-fit=cover; Inter import (done)
+├── styles/tokens.css                    # + sidebar and stat-tile tokens
+├── styles/app.css                       # shell grid (sidebar ≥ 1024 px, icon rail), top bar, panel, tab bar
 ├── components/ui/
-│   ├── PageHeader.tsx               # new
-│   ├── Card.tsx                     # new (Card, CardRow)
-│   ├── StatusBadge.tsx              # reworked: five meanings, icon + word
-│   ├── Button.tsx                   # reworked: primary / secondary / destructive / quiet
-│   ├── DataState.tsx                # reworked: shared layout
-│   ├── Dialog.tsx, ConfirmDialog.tsx, Select.tsx, TextField.tsx, TextArea.tsx, Toast.tsx, Combobox.tsx, DropdownMenu.tsx  # restyled
-│   └── nav/{Sidebar,TabBar,navItems}.tsx  # new
-├── routes/__root.tsx                # shell: sidebar ≥ 768 px, tab bar < 768 px
-├── routes/home.tsx                  # needs-attention list (R10)
-├── routes/**                        # every screen onto PageHeader / Card / DataState
-└── features/**                      # cards and lists onto Card / CardRow / StatusBadge
+│   ├── PageHeader.tsx                   # breadcrumbs; solid, not sticky
+│   ├── Card.tsx                         # + title / tools / footer bars
+│   ├── StatTile.tsx                     # new
+│   ├── Button, StatusBadge, DataState, Dialog, … (done)
+│   └── nav/
+│       ├── navItems.ts, TabBar.tsx      # (done)
+│       ├── Sidebar.tsx                  # dark, collapsible icon rail, shared by panel
+│       ├── TopBar.tsx                   # new
+│       └── SidebarPanel.tsx             # new: slide-in on Radix Dialog
+├── routes/__root.tsx                    # shell: TopBar + Sidebar (≥ 1024) / SidebarPanel (< 1024) + TabBar (< 768)
+├── routes/home.tsx                      # + stat tiles
+└── routes/**, features/**               # pass breadcrumbs; header-bar cards where a card has a title
 tests/
-├── unit/design-tokens.test.ts       # contrast of every token pair, both themes
-├── unit/design-scale.test.ts        # type and spacing scale scan
-└── e2e/
-    ├── design-system.spec.ts        # tab bar, frosted fallback, font served locally, Home attention
-    └── a11y-responsive.spec.ts      # extended: dark theme and reduced transparency
+├── unit/design-tokens.test.ts           # + sidebar and tile pairs
+├── e2e/design-shell.spec.ts             # new: top bar, collapse + memory, breadcrumbs, slide-in panel
+├── e2e/design-system.spec.ts            # header expectations updated (title row solid; top bar sticky)
+├── e2e/design-attention.spec.ts         # + stat tiles
+└── e2e/design-navigation.spec.ts        # tab bar (unchanged); frosted fallback now on the top bar
 ```
 
-**Structure Decision**: same web layout as features 001–003; changes are confined to `src/web/`
-and tests.
+**Structure Decision**: same web layout as features 001–003; changes stay in `src/web/` and tests.
 
 ## Complexity Tracking
 

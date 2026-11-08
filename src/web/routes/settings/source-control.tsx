@@ -62,6 +62,7 @@ export function SourceControlPage() {
     <>
       <PageHeader
         title="Source control"
+        breadcrumbs={[{ label: 'Settings', to: '/settings' }]}
         description="GitHub and GitLab access tokens that let agents read and change your repositories."
         action={
           <div className="flex flex-wrap gap-2">

@@ -97,6 +97,7 @@ export function AgentsPage() {
     <>
       <PageHeader
         title="Agents"
+        breadcrumbs={[{ label: 'Settings', to: '/settings' }]}
         description="Each agent is one Markdown file: its role, model and working instructions."
         action={
           <Link

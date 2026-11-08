@@ -193,6 +193,7 @@ function ProjectDetail({ project }: { project: Project }) {
     <>
       <PageHeader
         title={project.name}
+        breadcrumbs={[{ label: 'Projects', to: '/projects' }]}
         description={<span className="break-all">{project.repoFullName}</span>}
         action={<StatusBadge status={project.readiness} />}
         wide

@@ -1,4 +1,4 @@
-# Data Model: A Modern, Apple-Style Staplr with a Green Accent
+# Data Model: An AdminLTE-Style Staplr with Apple-Style Details
 
 No stored data changes. No migration, no new or changed API fields, no personal data.
 
@@ -15,3 +15,4 @@ Client-side derived data only:
   - Order: failed first, then needs attention; empty list → "Everything is ready."
 
 - **Theme preference**: unchanged (stored in the browser as today).
+- **Sidebar collapsed** (wide screens): `true`/`false` in `localStorage` key `staplr-sidebar`, per browser, read and written in try/catch; default expanded. Not personal data.

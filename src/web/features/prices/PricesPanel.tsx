@@ -1,3 +1,4 @@
+import { Card } from '../../components/ui/Card';
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { PriceStatus } from '../../../shared/schemas/prices';
@@ -70,14 +71,18 @@ export function PricesPanel() {
   }
 
   return (
-    <section
+    <Card
+      as="section"
       aria-labelledby="prices-heading"
-      data-card=""
-      className="flex flex-col gap-3 rounded-card border border-separator bg-surface p-4 shadow-card md:p-6"
+      title="Model prices"
+      titleId="prices-heading"
+      className="flex flex-col gap-3"
+      footer={
+        <Button busy={refreshing} onClick={() => void refresh()}>
+          Refresh prices
+        </Button>
+      }
     >
-      <h2 id="prices-heading" className="text-section font-semibold">
-        Model prices
-      </h2>
       <p className="text-secondary text-muted">
         List prices come from the official Anthropic and OpenAI pricing pages
         and are shown beside each model. They are read once a day.
@@ -125,13 +130,6 @@ export function PricesPanel() {
           {error}
         </p>
       )}
-      <Button
-        className="self-start"
-        busy={refreshing}
-        onClick={() => void refresh()}
-      >
-        Refresh prices
-      </Button>
-    </section>
+    </Card>
   );
 }

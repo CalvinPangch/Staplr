@@ -27,7 +27,12 @@ test('lists a captured error with time, route, request ID and message, and no se
   });
   expect(failed).toBe(500);
   await page.goto('/diagnostics');
-  const item = page.getByRole('main').getByRole('listitem').first();
+  // the first entry of the list, not a breadcrumb step
+  const item = page
+    .getByRole('main')
+    .getByRole('listitem')
+    .filter({ hasText: 'Request ID' })
+    .first();
   await expect(item).toContainText('Unexpected server error');
   await expect(item).toContainText('/api/__test/fail');
   await expect(item.getByText('Request ID')).toBeVisible();
