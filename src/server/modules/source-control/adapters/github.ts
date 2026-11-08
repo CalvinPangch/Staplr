@@ -15,11 +15,18 @@ import {
 const everything: PermissionId[] = [...permissionIds];
 const timeoutMs = 15_000;
 
+/**
+ * The HTTP status GitHub answered with, or undefined when no answer came back.
+ * Octokit reports a network failure as status 500 without a response, so only
+ * an error that carries a response counts as an answer.
+ */
 function statusOf(error: unknown): number | undefined {
   return typeof error === 'object' &&
     error !== null &&
     'status' in error &&
-    typeof error.status === 'number'
+    typeof error.status === 'number' &&
+    'response' in error &&
+    error.response !== undefined
     ? error.status
     : undefined;
 }
@@ -36,7 +43,9 @@ function failure(error: unknown): VerifyResult {
   const status = statusOf(error);
   if (status === 401 || (status === 403 && !rateLimited(error)))
     return { ok: false, failure: 'invalid' };
-  return { ok: false, failure: 'unavailable' };
+  return status === undefined
+    ? { ok: false, failure: 'unavailable' }
+    : { ok: false, failure: 'unavailable', status };
 }
 
 function repositoryFailure(error: unknown): RepositoryFailure {

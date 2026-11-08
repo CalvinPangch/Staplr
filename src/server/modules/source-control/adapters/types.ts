@@ -11,12 +11,18 @@ export type VerifyResult =
     }
   | {
       ok: false;
+      /** invalid / expired / revoked: the platform refused the token. */
+      failure: 'invalid' | 'expired' | 'revoked';
+    }
+  | {
+      ok: false;
       /**
-       * invalid / expired / revoked: the platform refused the token.
-       * unavailable: the platform could not be reached or had an outage, so
-       * nothing is known about the token.
+       * Nothing is known about the token: the platform could not be reached,
+       * had an outage, or answered in a way Staplr does not expect.
        */
-      failure: 'invalid' | 'expired' | 'revoked' | 'unavailable';
+      failure: 'unavailable';
+      /** the HTTP status when the platform did answer; absent for network failures */
+      status?: number;
     };
 
 export interface RepositorySummary {

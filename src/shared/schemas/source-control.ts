@@ -22,10 +22,20 @@ const nameSchema = z
   .trim()
   .min(1, 'Enter a name of 1 to 80 characters.')
   .max(80, 'Enter a name of 1 to 80 characters.');
+/**
+ * Tokens are plain printable ASCII. Spaces and line breaks around a pasted
+ * token are dropped; anything else (often an invisible character copied with
+ * it) is refused here, because it could never be sent to the platform.
+ */
 const tokenSchema = z
   .string()
+  .trim()
   .min(1, 'Enter the access token.')
-  .max(4096, 'This token is too long.');
+  .max(4096, 'This token is too long.')
+  .regex(
+    /^[\x21-\x7e]+$/,
+    'The token contains a character that cannot be part of a token, often an invisible one copied with it. Copy the token again and paste it.',
+  );
 
 export const sourceControlCreateSchema = z
   .object({
