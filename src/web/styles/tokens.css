@@ -1,87 +1,130 @@
 /*
- * Design tokens. Every text/background pair below meets WCAG 2.2 AA
- * (4.5:1 for text, 3:1 for component borders and the focus ring), in both
- * themes. Components use these tokens through the Tailwind theme in app.css;
- * do not hard-code colors elsewhere.
+ * Design tokens (feature 004): Apple-style neutral surfaces with Staplr's green
+ * as the single accent. Every text/background pair meets WCAG 2.2 AA (4.5:1
+ * text, 3:1 borders and focus) in both themes, including text on the frosted
+ * bars over the worst content; tests/unit/design-tokens.test.ts checks this.
+ * Components use these tokens through the Tailwind theme in app.css; do not
+ * hard-code colours elsewhere.
  */
 :root {
   color-scheme: light;
-  --c-bg: #ffffff;
-  --c-surface: #f4f8f5;
-  --c-surface-strong: #e5f1e9;
-  --c-fg: #18352a;
-  --c-muted: #4b6559;
-  --c-border: #718b7b;
-  --c-border-soft: #d5e4d9;
-  --c-primary: #176b47;
-  --c-primary-fg: #ffffff;
-  --c-link: #176b47;
-  --c-danger: #b91c1c;
-  --c-danger-fg: #ffffff;
-  --c-danger-soft: #fef2f2;
-  --c-success: #15803d;
-  --c-success-soft: #f0fdf4;
-  --c-warning: #92400e;
-  --c-warning-soft: #fffbeb;
-  --c-info-soft: #eef8f2;
-  --c-focus: #176b47;
+  /* surfaces */
+  --c-bg: #f5f5f7;
+  --c-surface: #ffffff;
+  --c-surface-raised: #ffffff;
+  --c-bar: rgb(245 245 247 / 92%);
+  /* text and lines */
+  --c-fg: #1d1d1f;
+  --c-muted: #6e6e73;
+  --c-separator: #d2d2d7;
+  --c-control: #8e8e93;
+  /* the one accent: actions, links, current item, selection, focus */
+  --c-accent: #176b47;
+  --c-accent-fg: #ffffff;
+  --c-accent-soft: #e6f1eb;
+  /* status meanings, always shown with an icon and a word */
+  --c-status-good: #1a7f37;
+  --c-status-good-soft: #eaf6ec;
+  --c-status-attention: #8a4b00;
+  --c-status-attention-soft: #fff4e0;
+  --c-status-failed: #c41e1e;
+  --c-status-failed-soft: #fdecec;
+  --c-status-progress: #1f5fbf;
+  --c-status-progress-soft: #eaf1fc;
+  --c-status-neutral: #6e6e73;
+  --c-status-neutral-soft: #ffffff;
+  --c-on-failed: #ffffff;
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 6%);
+
+  /* type scale: the only five text sizes in the app */
+  --fs-title: 1.75rem;
+  --lh-title: 2.125rem;
+  --fs-section: 1.25rem;
+  --lh-section: 1.625rem;
+  --fs-body: 1rem;
+  --lh-body: 1.5rem;
+  --fs-secondary: 0.875rem;
+  --lh-secondary: 1.25rem;
+  --fs-caption: 0.75rem;
+  --lh-caption: 1rem;
+
+  /* spacing: the only eight spacing values in the app */
   --space-1: 0.25rem;
   --space-2: 0.5rem;
   --space-3: 0.75rem;
   --space-4: 1rem;
-  --space-6: 1.5rem;
-  --space-8: 2rem;
-  --radius: 0.5rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+  --space-8: 4rem;
+
+  /* shape and motion */
+  --r-card: 14px;
+  --r-control: 10px;
+  --r-pill: 999px;
+  --motion-fast: 150ms;
+  --motion-base: 200ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+
   --font-sans:
-    system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
-    sans-serif;
-  --font-mono: ui-monospace, 'Cascadia Code', Menlo, Consolas, monospace;
+    'Inter Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  --font-mono:
+    ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, Consolas, monospace;
 }
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --c-bg: #10251d;
-  --c-surface: #19372a;
-  --c-surface-strong: #284b39;
-  --c-fg: #f1f8f2;
-  --c-muted: #c4dace;
-  --c-border: #9bbbad;
-  --c-border-soft: #4b6c59;
-  --c-primary: #a1dfb3;
-  --c-primary-fg: #10251d;
-  --c-link: #a1dfb3;
-  --c-danger: #fca5a5;
-  --c-danger-fg: #10251d;
-  --c-danger-soft: #3f1d1d;
-  --c-success: #86efac;
-  --c-success-soft: #14301f;
-  --c-warning: #fcd34d;
-  --c-warning-soft: #3b2f0b;
-  --c-info-soft: #203f31;
-  --c-focus: #a1dfb3;
+  --c-bg: #000000;
+  --c-surface: #1c1c1e;
+  --c-surface-raised: #2c2c2e;
+  --c-bar: rgb(28 28 30 / 92%);
+  --c-fg: #f5f5f7;
+  --c-muted: #aeaeb2;
+  --c-separator: #38383a;
+  --c-control: #8e8e93;
+  --c-accent: #5bd38a;
+  --c-accent-fg: #0b2a1a;
+  --c-accent-soft: #15301f;
+  --c-status-good: #6fdc8c;
+  --c-status-good-soft: #14301f;
+  --c-status-attention: #ffc861;
+  --c-status-attention-soft: #3a2a0a;
+  --c-status-failed: #ff8a80;
+  --c-status-failed-soft: #3a1716;
+  --c-status-progress: #8ab8ff;
+  --c-status-progress-soft: #16243d;
+  --c-status-neutral: #aeaeb2;
+  --c-status-neutral-soft: #1c1c1e;
+  --c-on-failed: #1c1c1e;
+  --shadow-card: none;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     color-scheme: dark;
-    --c-bg: #10251d;
-    --c-surface: #19372a;
-    --c-surface-strong: #284b39;
-    --c-fg: #f1f8f2;
-    --c-muted: #c4dace;
-    --c-border: #9bbbad;
-    --c-border-soft: #4b6c59;
-    --c-primary: #a1dfb3;
-    --c-primary-fg: #10251d;
-    --c-link: #a1dfb3;
-    --c-danger: #fca5a5;
-    --c-danger-fg: #10251d;
-    --c-danger-soft: #3f1d1d;
-    --c-success: #86efac;
-    --c-success-soft: #14301f;
-    --c-warning: #fcd34d;
-    --c-warning-soft: #3b2f0b;
-    --c-info-soft: #203f31;
-    --c-focus: #a1dfb3;
+    --c-bg: #000000;
+    --c-surface: #1c1c1e;
+    --c-surface-raised: #2c2c2e;
+    --c-bar: rgb(28 28 30 / 92%);
+    --c-fg: #f5f5f7;
+    --c-muted: #aeaeb2;
+    --c-separator: #38383a;
+    --c-control: #8e8e93;
+    --c-accent: #5bd38a;
+    --c-accent-fg: #0b2a1a;
+    --c-accent-soft: #15301f;
+    --c-status-good: #6fdc8c;
+    --c-status-good-soft: #14301f;
+    --c-status-attention: #ffc861;
+    --c-status-attention-soft: #3a2a0a;
+    --c-status-failed: #ff8a80;
+    --c-status-failed-soft: #3a1716;
+    --c-status-progress: #8ab8ff;
+    --c-status-progress-soft: #16243d;
+    --c-status-neutral: #aeaeb2;
+    --c-status-neutral-soft: #1c1c1e;
+    --c-on-failed: #1c1c1e;
+    --shadow-card: none;
   }
 }

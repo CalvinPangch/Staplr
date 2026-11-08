@@ -273,7 +273,9 @@ test('relinks a renamed repository after the old one disappears', async ({
   await dialog.getByRole('combobox', { name: 'Repository' }).fill('renamed');
   await dialog.getByRole('option', { name: /octo\/shop-renamed/ }).click();
   await dialog.getByRole('button', { name: 'Relink repository' }).click();
-  await expect(page.getByText('octo/shop-renamed')).toBeVisible();
+  await expect(
+    page.locator('main').getByText('octo/shop-renamed'),
+  ).toBeVisible();
   await expect(page.getByText('Downloaded').first()).toBeVisible({
     timeout: 30000,
   });

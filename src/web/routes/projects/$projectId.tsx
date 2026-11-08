@@ -9,6 +9,7 @@ import { DataState } from '../../components/ui/DataState';
 import { Dialog } from '../../components/ui/Dialog';
 import { useAnnounce } from '../../components/ui/LiveRegion';
 import { Select } from '../../components/ui/Select';
+import { PageBody, PageHeader } from '../../components/ui/PageHeader';
 import { StatusBadge } from '../../components/ui/StatusBadge';
 import {
   fetchBranches,
@@ -83,7 +84,7 @@ function RelinkDialog({
       {error && (
         <p
           role="alert"
-          className="rounded-lg border border-danger bg-danger-soft p-3 text-danger"
+          className="rounded-card border border-status-failed bg-status-failed-soft p-4 text-status-failed"
         >
           {error}
         </p>
@@ -189,228 +190,230 @@ function ProjectDetail({ project }: { project: Project }) {
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1>{project.name}</h1>
-        <StatusBadge status={project.readiness} />
-      </div>
-      <p className="break-all text-muted">{project.repoFullName}</p>
-
-      {project.reasons.length > 0 && (
-        <section
-          aria-labelledby="reasons-heading"
-          className="rounded-lg border border-warning bg-warning-soft p-3 text-warning"
-        >
-          <h2 id="reasons-heading" className="text-base">
-            Why this project is not ready
-          </h2>
-          <ul className="m-0 mt-1 list-disc pl-6">
-            {project.reasons.map((reason, index) => (
-              <li key={`${reason.code}-${reason.agentId ?? index}`}>
-                {reason.message}{' '}
-                {reason.code === 'source_control_needs_attention' && (
-                  <Link to="/settings/source-control" className="underline">
-                    Open Source control
-                  </Link>
-                )}
-                {reason.code === 'agent_not_ready' && reason.agentId && (
-                  <Link
-                    to="/agents/$agentId"
-                    params={{ agentId: reason.agentId }}
-                    className="underline"
-                  >
-                    Open the agent
-                  </Link>
-                )}
-                {reason.code === 'repository_unavailable' && (
-                  <Button onClick={() => setRelinking(true)}>
-                    Relink repository
-                  </Button>
-                )}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {error && (
-        <p
-          role="alert"
-          className="rounded-lg border border-danger bg-danger-soft p-3 text-danger"
-        >
-          {error}
-        </p>
-      )}
-
-      <div
-        role="tablist"
-        aria-label="Project views"
-        className="flex gap-1 border-b border-edge-soft"
-      >
-        {(
-          [
-            ['board', 'Board'],
-            ['setup', 'Setup'],
-          ] as const
-        ).map(([id, label]) => (
-          <button
-            key={id}
-            id={`tab-${id}`}
-            type="button"
-            role="tab"
-            aria-selected={tab === id}
-            aria-controls={`panel-${id}`}
-            tabIndex={tab === id ? 0 : -1}
-            onClick={() => setTab(id)}
-            onKeyDown={(event) => {
-              if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
-                event.preventDefault();
-                const next = id === 'board' ? 'setup' : 'board';
-                setTab(next);
-                document.getElementById(`tab-${next}`)?.focus();
-              }
-            }}
-            className={`min-h-11 rounded-t-lg border-b-2 px-4 py-2 font-medium ${
-              tab === id
-                ? 'border-primary text-fg'
-                : 'border-transparent text-muted hover:text-fg'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {tab === 'board' && (
-        <div id="panel-board" role="tabpanel" aria-labelledby="tab-board">
-          <Board projectId={project.id} />
-        </div>
-      )}
-
-      {tab === 'setup' && (
-        <div
-          id="panel-setup"
-          role="tabpanel"
-          aria-labelledby="tab-setup"
-          className="flex flex-col gap-4"
-        >
+    <>
+      <PageHeader
+        title={project.name}
+        description={<span className="break-all">{project.repoFullName}</span>}
+        action={<StatusBadge status={project.readiness} />}
+        wide
+      />
+      <PageBody wide>
+        {project.reasons.length > 0 && (
           <section
-            aria-labelledby="repo-heading"
-            className="flex flex-col gap-3"
+            aria-labelledby="reasons-heading"
+            className="rounded-card border border-status-attention bg-status-attention-soft p-4 text-status-attention"
           >
-            <h2 id="repo-heading">Repository</h2>
-            <div className="flex flex-wrap items-center gap-2">
-              <StatusBadge status={project.downloadStatus} />
-              {project.downloadStatus === 'downloading' && (
-                <div className="flex min-w-48 flex-1 items-center gap-2">
-                  <progress
-                    className="h-3 flex-1"
-                    max={100}
-                    value={project.downloadProgress ?? 0}
-                    aria-label="Download progress"
-                  />
-                  <span>{project.downloadProgress ?? 0}%</span>
+            <h2 id="reasons-heading" className="text-section">
+              Why this project is not ready
+            </h2>
+            <ul className="m-0 mt-1 list-disc pl-6">
+              {project.reasons.map((reason, index) => (
+                <li key={`${reason.code}-${reason.agentId ?? index}`}>
+                  {reason.message}{' '}
+                  {reason.code === 'source_control_needs_attention' && (
+                    <Link to="/settings/source-control" className="underline">
+                      Open Source control
+                    </Link>
+                  )}
+                  {reason.code === 'agent_not_ready' && reason.agentId && (
+                    <Link
+                      to="/agents/$agentId"
+                      params={{ agentId: reason.agentId }}
+                      className="underline"
+                    >
+                      Open the agent
+                    </Link>
+                  )}
+                  {reason.code === 'repository_unavailable' && (
+                    <Button onClick={() => setRelinking(true)}>
+                      Relink repository
+                    </Button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {error && (
+          <p
+            role="alert"
+            className="rounded-card border border-status-failed bg-status-failed-soft p-4 text-status-failed"
+          >
+            {error}
+          </p>
+        )}
+
+        <div
+          role="tablist"
+          aria-label="Project views"
+          className="inline-flex self-start rounded-control bg-surface-raised p-1"
+        >
+          {(
+            [
+              ['board', 'Board'],
+              ['setup', 'Setup'],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              id={`tab-${id}`}
+              type="button"
+              role="tab"
+              aria-selected={tab === id}
+              aria-controls={`panel-${id}`}
+              tabIndex={tab === id ? 0 : -1}
+              onClick={() => setTab(id)}
+              onKeyDown={(event) => {
+                if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
+                  event.preventDefault();
+                  const next = id === 'board' ? 'setup' : 'board';
+                  setTab(next);
+                  document.getElementById(`tab-${next}`)?.focus();
+                }
+              }}
+              className={`min-h-11 min-w-24 rounded-control px-4 text-secondary font-semibold transition-colors duration-150 ${
+                tab === id
+                  ? 'bg-surface text-fg shadow-card'
+                  : 'text-muted hover:text-fg'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {tab === 'board' && (
+          <div id="panel-board" role="tabpanel" aria-labelledby="tab-board">
+            <Board projectId={project.id} />
+          </div>
+        )}
+
+        {tab === 'setup' && (
+          <div
+            id="panel-setup"
+            role="tabpanel"
+            aria-labelledby="tab-setup"
+            className="flex flex-col gap-4"
+          >
+            <section
+              aria-labelledby="repo-heading"
+              className="flex flex-col gap-3"
+            >
+              <h2 id="repo-heading">Repository</h2>
+              <div className="flex flex-wrap items-center gap-2">
+                <StatusBadge status={project.downloadStatus} />
+                {project.downloadStatus === 'downloading' && (
+                  <div className="flex min-w-48 flex-1 items-center gap-2">
+                    <progress
+                      className="h-3 flex-1"
+                      max={100}
+                      value={project.downloadProgress ?? 0}
+                      aria-label="Download progress"
+                    />
+                    <span>{project.downloadProgress ?? 0}%</span>
+                  </div>
+                )}
+              </div>
+              {project.downloadStatus === 'download_failed' && (
+                <div className="flex flex-col gap-2">
+                  <p>{project.downloadError}</p>
+                  <div>
+                    <Button
+                      variant="primary"
+                      busy={busy === 'retry'}
+                      onClick={() => void retry()}
+                    >
+                      Retry download
+                    </Button>
+                  </div>
                 </div>
               )}
-            </div>
-            {project.downloadStatus === 'download_failed' && (
-              <div className="flex flex-col gap-2">
-                <p>{project.downloadError}</p>
-                <div>
+              {downloaded && (
+                <div className="flex flex-wrap items-center gap-3">
+                  <p className="text-secondary">
+                    Last updated{' '}
+                    {project.lastUpdatedAt ? (
+                      <time dateTime={project.lastUpdatedAt}>
+                        {formatTime(project.lastUpdatedAt)}
+                      </time>
+                    ) : (
+                      'never'
+                    )}
+                  </p>
                   <Button
-                    variant="primary"
-                    busy={busy === 'retry'}
-                    onClick={() => void retry()}
+                    busy={busy === 'refresh'}
+                    onClick={() => void refresh()}
                   >
-                    Retry download
+                    Refresh
                   </Button>
                 </div>
-              </div>
-            )}
-            {downloaded && (
-              <div className="flex flex-wrap items-center gap-3">
-                <p className="text-sm">
-                  Last updated{' '}
-                  {project.lastUpdatedAt ? (
-                    <time dateTime={project.lastUpdatedAt}>
-                      {formatTime(project.lastUpdatedAt)}
-                    </time>
-                  ) : (
-                    'never'
-                  )}
+              )}
+              {project.lastRefreshError && (
+                <p role="note" className="text-secondary text-status-attention">
+                  {project.lastRefreshError}
                 </p>
-                <Button
-                  busy={busy === 'refresh'}
-                  onClick={() => void refresh()}
-                >
-                  Refresh
+              )}
+              <BranchPicker
+                project={project}
+                disabled={!connectionId || switching}
+                onChange={(branch) => void changeBranch(branch)}
+              />
+              <div>
+                <Button onClick={() => setRelinking(true)}>
+                  Relink repository
                 </Button>
               </div>
-            )}
-            {project.lastRefreshError && (
-              <p role="note" className="text-sm text-warning">
-                {project.lastRefreshError}
-              </p>
-            )}
-            <BranchPicker
-              project={project}
-              disabled={!connectionId || switching}
-              onChange={(branch) => void changeBranch(branch)}
-            />
-            <div>
-              <Button onClick={() => setRelinking(true)}>
-                Relink repository
-              </Button>
-            </div>
-          </section>
+            </section>
 
-          <TeamRoster projectId={project.id} />
+            <TeamRoster projectId={project.id} />
 
-          <section
-            aria-labelledby="danger-heading"
-            className="flex flex-col gap-2"
-          >
-            <h2 id="danger-heading">Delete project</h2>
-            <div>
-              <Button variant="danger" onClick={() => setDeleting(true)}>
-                Delete project
-              </Button>
-            </div>
-          </section>
-        </div>
-      )}
+            <section
+              aria-labelledby="danger-heading"
+              className="flex flex-col gap-2"
+            >
+              <h2 id="danger-heading">Delete project</h2>
+              <div>
+                <Button variant="destructive" onClick={() => setDeleting(true)}>
+                  Delete project
+                </Button>
+              </div>
+            </section>
+          </div>
+        )}
 
-      <RelinkDialog
-        project={project}
-        open={relinking}
-        onOpenChange={setRelinking}
-      />
-      <ConfirmDialog
-        open={deleting}
-        onOpenChange={setDeleting}
-        title={`Delete ${project.name}?`}
-        description="This cannot be undone."
-        confirmLabel="Delete project"
-        destructive
-        busy={removing}
-        onConfirm={() => void remove()}
-      >
-        <div className="flex flex-col gap-2">
-          <p className="font-medium">This removes:</p>
-          <ul className="list-disc pl-6">
-            <li>the downloaded repository and any working copies</li>
-            <li>the team assignments of this project</li>
-            <li>all of its tickets</li>
-          </ul>
-          <p className="font-medium">This keeps:</p>
-          <ul className="list-disc pl-6">
-            <li>your agents and provider connections</li>
-            <li>usage records, shown as “Deleted project”</li>
-            <li>the repository on GitHub or GitLab</li>
-          </ul>
-        </div>
-      </ConfirmDialog>
-    </div>
+        <RelinkDialog
+          project={project}
+          open={relinking}
+          onOpenChange={setRelinking}
+        />
+        <ConfirmDialog
+          open={deleting}
+          onOpenChange={setDeleting}
+          title={`Delete ${project.name}?`}
+          description="This cannot be undone."
+          confirmLabel="Delete project"
+          destructive
+          busy={removing}
+          onConfirm={() => void remove()}
+        >
+          <div className="flex flex-col gap-2">
+            <p className="font-medium">This removes:</p>
+            <ul className="list-disc pl-6">
+              <li>the downloaded repository and any working copies</li>
+              <li>the team assignments of this project</li>
+              <li>all of its tickets</li>
+            </ul>
+            <p className="font-medium">This keeps:</p>
+            <ul className="list-disc pl-6">
+              <li>your agents and provider connections</li>
+              <li>usage records, shown as “Deleted project”</li>
+              <li>the repository on GitHub or GitLab</li>
+            </ul>
+          </div>
+        </ConfirmDialog>
+      </PageBody>
+    </>
   );
 }
 

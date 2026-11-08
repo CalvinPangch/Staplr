@@ -28,22 +28,22 @@ export function TicketCardView({
   return (
     <div
       className={cn(
-        'board-ticket flex flex-col gap-2 rounded-lg border border-edge-soft bg-bg p-3 shadow-sm',
-        dragging && 'shadow-lg ring-2 ring-primary',
+        'flex flex-col gap-2 rounded-card border border-separator bg-surface p-3 shadow-card',
+        dragging && 'shadow-lg ring-2 ring-accent',
       )}
     >
       <div className="flex items-start justify-between gap-2">
-        <h3 className="m-0 min-w-0 break-words text-base font-semibold">
+        <h3 className="m-0 min-w-0 break-words text-body font-semibold">
           {ticket.title}
         </h3>
         {handle}
       </div>
       {ticket.description && (
-        <p className="m-0 line-clamp-3 whitespace-pre-wrap break-words text-sm text-muted">
+        <p className="m-0 line-clamp-3 whitespace-pre-wrap break-words text-secondary text-muted">
           {ticket.description}
         </p>
       )}
-      <p className="m-0 text-xs text-muted">
+      <p className="m-0 text-caption text-muted">
         In this column for{' '}
         <time dateTime={ticket.statusChangedAt}>
           {timeInColumn(ticket.statusChangedAt)}
@@ -95,7 +95,7 @@ export function TicketCard({
       <div
         data-testid="ticket-card"
         data-ticket-id={ticket.id}
-        className="rounded-lg"
+        className="rounded-control"
         onPointerDown={
           listeners?.onPointerDown as
             PointerEventHandler<HTMLDivElement> | undefined
@@ -109,7 +109,7 @@ export function TicketCard({
               type="button"
               data-testid="drag-handle"
               aria-label={`Drag ${ticket.title}`}
-              className="inline-flex min-h-11 min-w-11 cursor-grab items-center justify-center rounded-lg border border-edge bg-bg text-fg hover:bg-surface"
+              className="inline-flex min-h-11 min-w-11 cursor-grab items-center justify-center rounded-control border border-control bg-bg text-fg hover:bg-surface"
               {...attributes}
               onKeyDown={
                 listeners?.onKeyDown as
@@ -129,7 +129,7 @@ export function TicketCard({
               <Button onClick={() => setEditing(true)}>
                 Edit<span className="sr-only"> {ticket.title}</span>
               </Button>
-              <Button variant="danger" onClick={() => setDeleting(true)}>
+              <Button variant="destructive" onClick={() => setDeleting(true)}>
                 Delete<span className="sr-only"> {ticket.title}</span>
               </Button>
             </div>

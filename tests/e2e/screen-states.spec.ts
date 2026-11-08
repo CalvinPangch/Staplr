@@ -251,3 +251,74 @@ test.describe('provider settings', () => {
     await expect(page.getByText('fixture claude')).toBeVisible();
   });
 });
+
+/**
+ * Feature 004, US3: every list screen shows the same empty, error and loading
+ * layout, each with a next step.
+ */
+test.describe('shared states on every list screen', () => {
+  const screens = [
+    { path: '/projects', api: '**/api/projects', what: 'projects' },
+    { path: '/agents', api: '**/api/agents', what: 'agents' },
+    {
+      path: '/settings/providers',
+      api: '**/api/provider-connections',
+      what: 'provider connections',
+    },
+    {
+      path: '/settings/source-control',
+      api: '**/api/source-control-connections',
+      what: 'connections',
+    },
+  ];
+
+  for (const screen of screens)
+    test(`${screen.path}: empty, error with Retry, and loading look the same`, async ({
+      page,
+    }) => {
+      await signInAsOwner(page);
+
+      await page.route(screen.api, (route) =>
+        route.request().method() === 'GET'
+          ? route.fulfill({ json: [] })
+          : route.continue(),
+      );
+      await page.goto(screen.path);
+      const empty = page.locator('main [data-state="empty"]');
+      await expect(empty).toBeVisible();
+      await expect(empty.locator('svg').first()).toBeVisible();
+      // the empty state offers the next step
+      await expect(
+        empty.getByRole('button').or(empty.getByRole('link')).first(),
+      ).toBeVisible();
+      await page.unroute(screen.api);
+
+      let failing = true;
+      await page.route(screen.api, async (route) => {
+        if (route.request().method() !== 'GET' || !failing)
+          return route.continue();
+        await route.fulfill({
+          status: 500,
+          contentType: 'application/problem+json',
+          body: JSON.stringify(failure),
+        });
+      });
+      await page.goto(screen.path);
+      const alert = page.locator('main [data-state="error"]');
+      await expect(alert).toHaveAttribute('role', 'alert');
+      await expect(alert).toContainText(`Could not load ${screen.what}`);
+      failing = false;
+      await alert.getByRole('button', { name: 'Retry' }).click();
+      await expect(alert).toBeHidden();
+      await page.unroute(screen.api);
+
+      await page.route(screen.api, async (route) => {
+        if (route.request().method() === 'GET')
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+        await route.continue();
+      });
+      await page.goto(screen.path);
+      await expect(page.locator('main [data-state="loading"]')).toBeVisible();
+      await page.unroute(screen.api);
+    });
+});

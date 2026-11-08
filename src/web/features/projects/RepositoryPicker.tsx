@@ -66,7 +66,7 @@ export function RepositoryPicker({
         hint="Only connections that are Connected can be used."
       />
       {connections.isSuccess && usable.length === 0 && (
-        <p className="text-sm">
+        <p className="text-secondary">
           Add a GitHub or GitLab token first.{' '}
           <Link to="/settings/source-control" className="underline">
             Open Source control

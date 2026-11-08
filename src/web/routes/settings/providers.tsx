@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { PageBody, PageHeader } from '../../components/ui/PageHeader';
 import { useQueryClient } from '@tanstack/react-query';
 import { api, errorMessage } from '../../lib/api';
 import { Button } from '../../components/ui/Button';
@@ -61,58 +62,63 @@ export function ProvidersPage() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1>Providers</h1>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            busy={checkingAll}
-            disabled={connections.length === 0}
-            onClick={() => void checkAll()}
-          >
-            Check all connections
-          </Button>
-          <Button onClick={() => setAddingCodex(true)}>Add Codex</Button>
-          <Button variant="primary" onClick={() => setAddingClaude(true)}>
-            Add Claude
-          </Button>
-        </div>
-      </div>
-      <p className="text-muted">
-        Agents run on Claude with your own Anthropic API key, or on Codex with
-        your own account. Credentials are stored encrypted and are never shown
-        again. Connections are re-checked every hour.
-      </p>
-      {notice && (
-        <p
-          role="alert"
-          className="rounded-lg border border-warning bg-warning-soft p-3 text-warning"
-        >
-          {notice}
-        </p>
-      )}
-      <DataState
-        what="provider connections"
-        isLoading={query.isPending}
-        error={query.error}
-        isEmpty={connections.length === 0}
-        empty={
-          <p>
-            No provider connections yet. Add a Claude API key or sign in to
-            Codex so agents have a model to run on.
-          </p>
+    <>
+      <PageHeader
+        title="Providers"
+        description="Claude with your own Anthropic API key, or Codex with your own account. Re-checked every hour."
+        action={
+          <div className="flex flex-wrap gap-2">
+            <Button
+              busy={checkingAll}
+              disabled={connections.length === 0}
+              onClick={() => void checkAll()}
+            >
+              Check all connections
+            </Button>
+            <Button onClick={() => setAddingCodex(true)}>Add Codex</Button>
+            <Button variant="primary" onClick={() => setAddingClaude(true)}>
+              Add Claude
+            </Button>
+          </div>
         }
-        onRetry={() => void query.refetch()}
-      >
-        <ul className="m-0 flex list-none flex-col gap-4 p-0">
-          {connections.map((connection) => (
-            <ProviderCard key={connection.id} connection={connection} />
-          ))}
-        </ul>
-      </DataState>
-      <PricesPanel />
-      <ApiKeyDialog open={addingClaude} onOpenChange={setAddingClaude} />
-      <CodexLoginDialog open={addingCodex} onOpenChange={setAddingCodex} />
-    </div>
+      />
+      <PageBody>
+        {notice && (
+          <p
+            role="alert"
+            className="rounded-card border border-status-attention bg-status-attention-soft p-4 text-status-attention"
+          >
+            {notice}
+          </p>
+        )}
+        <DataState
+          what="provider connections"
+          isLoading={query.isPending}
+          error={query.error}
+          isEmpty={connections.length === 0}
+          empty={
+            <>
+              <p>
+                No provider connections yet. Add a Claude API key or sign in to
+                Codex so agents have a model to run on.
+              </p>
+              <Button variant="primary" onClick={() => setAddingClaude(true)}>
+                Add your first Claude connection
+              </Button>
+            </>
+          }
+          onRetry={() => void query.refetch()}
+        >
+          <ul className="m-0 flex list-none flex-col gap-4 p-0">
+            {connections.map((connection) => (
+              <ProviderCard key={connection.id} connection={connection} />
+            ))}
+          </ul>
+        </DataState>
+        <PricesPanel />
+        <ApiKeyDialog open={addingClaude} onOpenChange={setAddingClaude} />
+        <CodexLoginDialog open={addingCodex} onOpenChange={setAddingCodex} />
+      </PageBody>
+    </>
   );
 }

@@ -56,8 +56,12 @@ export function AgentFileEditor({
   }
 
   return (
-    <div className="flex flex-col gap-2">
-      <div role="tablist" aria-label="Agent file" className="flex gap-1">
+    <div className="flex flex-col gap-3">
+      <div
+        role="tablist"
+        aria-label="Agent file"
+        className="inline-flex self-start rounded-control bg-bg p-1"
+      >
         {tabs.map((name) => (
           <button
             key={name}
@@ -73,10 +77,10 @@ export function AgentFileEditor({
             onClick={() => setTab(name)}
             onKeyDown={onTabKey}
             className={cn(
-              'min-h-11 rounded-t-lg border border-b-0 px-4 py-2 text-sm font-medium',
+              'min-h-11 min-w-24 rounded-control px-4 text-secondary font-semibold transition-colors duration-150',
               tab === name
-                ? 'border-edge bg-surface'
-                : 'border-transparent text-muted hover:text-fg',
+                ? 'bg-surface text-fg shadow-card'
+                : 'text-muted hover:text-fg',
             )}
           >
             {name === 'edit' ? 'Edit' : 'Preview'}
@@ -95,7 +99,7 @@ export function AgentFileEditor({
           maxLength={maxAgentFileLength}
           rows={22}
           spellCheck={false}
-          className="font-mono text-sm"
+          className="font-mono text-secondary"
           hint="The header between the --- lines sets name, role, provider, connection and model. Everything below it is the agent's instructions."
           error={
             problems.length === 0
@@ -107,7 +111,7 @@ export function AgentFileEditor({
         {problems.length > 0 && (
           <ul
             aria-label="Problems in the agent file"
-            className="m-0 mt-2 flex list-none flex-col gap-1 rounded-lg border border-danger bg-danger-soft p-3 text-sm text-danger"
+            className="m-0 mt-2 flex list-none flex-col gap-1 rounded-card border border-status-failed bg-status-failed-soft p-4 text-secondary text-status-failed"
           >
             {problems.map((problem) => (
               <li key={`${problem.line}-${problem.field}-${problem.message}`}>
@@ -123,11 +127,11 @@ export function AgentFileEditor({
         id={`${id}-preview-panel`}
         aria-labelledby={`${id}-preview-tab`}
         hidden={tab !== 'preview'}
-        className="flex flex-col gap-3 rounded-lg border border-edge-soft bg-surface p-4"
+        className="flex flex-col gap-3 rounded-control border border-separator bg-surface p-4"
       >
         {parsed.ok ? (
           <>
-            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-secondary">
               <dt className="text-muted">Name</dt>
               <dd className="break-all">{parsed.settings.name}</dd>
               <dt className="text-muted">Role</dt>
@@ -141,7 +145,7 @@ export function AgentFileEditor({
                 {parsed.settings.model || 'Not set'}
               </dd>
             </dl>
-            <div className="break-words text-sm [&_code]:font-mono [&_h1]:mt-3 [&_h1]:text-xl [&_h1]:font-semibold [&_h2]:mt-3 [&_h2]:text-lg [&_h2]:font-semibold [&_h3]:mt-2 [&_h3]:font-semibold [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:my-2 [&_pre]:overflow-x-auto [&_ul]:list-disc [&_ul]:pl-6">
+            <div className="break-words text-secondary [&_code]:font-mono [&_h1]:mt-3 [&_h1]:text-section [&_h1]:font-semibold [&_h2]:mt-3 [&_h2]:text-section [&_h2]:font-semibold [&_h3]:mt-2 [&_h3]:font-semibold [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:my-2 [&_pre]:overflow-x-auto [&_ul]:list-disc [&_ul]:pl-6">
               {parsed.instructions.trim() === '' ? (
                 <p className="text-muted">No instructions yet.</p>
               ) : (

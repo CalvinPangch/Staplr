@@ -1,3 +1,5 @@
+/* eslint-disable jsx-a11y/no-noninteractive-tabindex -- The scrollable table region needs keyboard focus. */
+import { PageBody, PageHeader } from '../components/ui/PageHeader';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { Button } from '../components/ui/Button';
@@ -51,62 +53,69 @@ export function AuditPage() {
   const entries = query.data?.pages.flat() ?? [];
 
   return (
-    <div className="flex flex-col gap-4">
-      <h1>Audit log</h1>
-      <p className="text-muted">
-        Changes to connections, newest first. Secret values are never recorded.
-      </p>
-      <DataState
-        what="audit entries"
-        isLoading={query.isPending}
-        error={query.error}
-        isEmpty={entries.length === 0}
-        empty={<p>No audit entries yet.</p>}
-        onRetry={() => void query.refetch()}
-      >
-        <div className="data-table overflow-x-auto">
-          <table className="w-full border-collapse text-left">
-            <caption className="sr-only">Audit entries, newest first</caption>
-            <thead>
-              <tr className="border-b border-edge">
-                <th scope="col" className="p-2">
-                  Time
-                </th>
-                <th scope="col" className="p-2">
-                  Action
-                </th>
-                <th scope="col" className="p-2">
-                  Target
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {entries.map((entry) => (
-                <tr key={entry.id} className="border-b border-edge-soft">
-                  <td className="p-2">
-                    <time dateTime={entry.at}>
-                      {new Date(entry.at).toLocaleString()}
-                    </time>
-                  </td>
-                  <td className="p-2">
-                    {actionLabels[entry.action] ?? entry.action}
-                  </td>
-                  <td className="p-2">{entry.targetName}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {query.hasNextPage && (
-          <Button
-            variant="secondary"
-            busy={query.isFetchingNextPage}
-            onClick={() => void query.fetchNextPage()}
+    <>
+      <PageHeader
+        title="Audit log"
+        description="Changes to connections, agents and projects, newest first. Secret values are never recorded."
+      />
+      <PageBody>
+        <DataState
+          what="audit entries"
+          isLoading={query.isPending}
+          error={query.error}
+          isEmpty={entries.length === 0}
+          empty={<p>No audit entries yet.</p>}
+          onRetry={() => void query.refetch()}
+        >
+          <div
+            className="data-table overflow-x-auto"
+            role="region"
+            aria-label="Audit entries"
+            tabIndex={0}
           >
-            Load older entries
-          </Button>
-        )}
-      </DataState>
-    </div>
+            <table className="w-full border-collapse text-left">
+              <caption className="sr-only">Audit entries, newest first</caption>
+              <thead>
+                <tr className="border-b border-control">
+                  <th scope="col" className="p-2">
+                    Time
+                  </th>
+                  <th scope="col" className="p-2">
+                    Action
+                  </th>
+                  <th scope="col" className="p-2">
+                    Target
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {entries.map((entry) => (
+                  <tr key={entry.id} className="border-b border-separator">
+                    <td className="p-2">
+                      <time dateTime={entry.at}>
+                        {new Date(entry.at).toLocaleString()}
+                      </time>
+                    </td>
+                    <td className="p-2">
+                      {actionLabels[entry.action] ?? entry.action}
+                    </td>
+                    <td className="p-2">{entry.targetName}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {query.hasNextPage && (
+            <Button
+              variant="secondary"
+              busy={query.isFetchingNextPage}
+              onClick={() => void query.fetchNextPage()}
+            >
+              Load older entries
+            </Button>
+          )}
+        </DataState>
+      </PageBody>
+    </>
   );
 }

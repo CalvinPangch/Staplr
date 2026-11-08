@@ -34,7 +34,10 @@ export function SetupPage() {
   });
 
   return (
-    <div className="auth-panel mx-auto flex max-w-md flex-col gap-4">
+    <div
+      data-card=""
+      className="flex flex-col gap-4 rounded-card border border-separator bg-surface p-4 shadow-card md:p-6"
+    >
       <h1>Create the owner account</h1>
       <p className="text-muted">
         This installation has one owner. Choose a username and a password of at
@@ -43,7 +46,7 @@ export function SetupPage() {
       {serverError && (
         <p
           role="alert"
-          className="rounded-lg border border-danger bg-danger-soft p-3 text-danger"
+          className="rounded-card border border-status-failed bg-status-failed-soft p-4 text-status-failed"
         >
           {serverError}
         </p>

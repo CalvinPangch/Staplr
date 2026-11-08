@@ -20,7 +20,7 @@ export function priceText(price: Price | undefined): string {
 export function ModelPrice({ price }: { price: Price | undefined }) {
   const known = priceText(price) !== 'Unknown';
   return (
-    <span className="flex flex-col text-sm text-muted">
+    <span className="flex flex-col text-secondary text-muted">
       <span>
         List price used for estimates: {priceText(price)}
         {known && price?.priceSource && (

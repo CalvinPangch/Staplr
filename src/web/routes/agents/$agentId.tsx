@@ -1,3 +1,4 @@
+import { ChevronRight } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import {
   useQuery,
@@ -22,6 +23,8 @@ import type { Agent, AgentTemplate } from '../../../shared/schemas/agents';
 import type { ModelAccess } from '../../../shared/schemas/providers';
 import { api, ApiError, errorMessage } from '../../lib/api';
 import { Button } from '../../components/ui/Button';
+import { Card } from '../../components/ui/Card';
+import { PageBody, PageHeader } from '../../components/ui/PageHeader';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { DataState } from '../../components/ui/DataState';
 import { useAnnounce } from '../../components/ui/LiveRegion';
@@ -83,17 +86,17 @@ function ModelList({
 
   return (
     <section aria-labelledby="models-heading" className="flex flex-col gap-2">
-      <h2 id="models-heading" className="text-base">
+      <h2 id="models-heading" className="text-section">
         Models for this connection
       </h2>
-      <p className="text-sm text-muted">
+      <p className="text-secondary text-muted">
         Catalog {catalogRevision}. A model can only be chosen once it is
         verified for this exact connection.
       </p>
       {error && (
         <p
           role="alert"
-          className="rounded-lg border border-danger bg-danger-soft p-3 text-sm text-danger"
+          className="rounded-card border border-status-failed bg-status-failed-soft p-4 text-secondary text-status-failed"
         >
           {error}
         </p>
@@ -102,9 +105,9 @@ function ModelList({
         {models.map((model) => (
           <li
             key={model.id}
-            className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-edge-soft bg-surface p-3"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-separator bg-surface p-4 shadow-card"
           >
-            <div className="flex flex-col text-sm">
+            <div className="flex flex-col text-secondary">
               <span className="font-medium">{model.label}</span>
               <span className="text-muted">
                 {modelStatusText(model)}
@@ -143,18 +146,21 @@ function TemplatePicker({
   const kept = (templates.data ?? []).filter((t) => t.kind === 'kept');
   const group = (title: string, list: AgentTemplate[]) => (
     <section aria-label={title} className="flex flex-col gap-2">
-      <h2 className="text-base">{title}</h2>
+      <h2 className="text-section">{title}</h2>
       <ul className="m-0 grid list-none gap-2 p-0 sm:grid-cols-2">
         {list.map((template) => (
           <li key={template.id}>
             <Button
-              className="w-full justify-start text-left"
+              className="min-h-16 w-full justify-between rounded-card text-left shadow-card"
               onClick={() => onPick(template)}
             >
-              {template.label}
-              <span className="ml-2 text-sm text-muted">
-                {roleLabels[template.role]}
+              <span className="flex flex-col">
+                {template.label}
+                <span className="text-secondary font-normal text-muted">
+                  {roleLabels[template.role]}
+                </span>
               </span>
+              <ChevronRight aria-hidden="true" className="size-4 text-muted" />
             </Button>
           </li>
         ))}
@@ -162,30 +168,31 @@ function TemplatePicker({
     </section>
   );
   return (
-    <div className="flex flex-col gap-4">
-      <h1>New agent</h1>
-      <p className="text-muted">
-        Choose a role to start from. You get the agent's Markdown file with that
-        role's instructions, ready to name and connect.
-      </p>
-      <DataState
-        what="the role templates"
-        isLoading={templates.isPending}
-        error={templates.error}
-        isEmpty={templates.isSuccess && templates.data.length === 0}
-        empty={<p>No role templates are available. Reload the page.</p>}
-        onRetry={() => void templates.refetch()}
-      >
-        {group('Roles', shipped)}
-        {kept.length > 0 && group('Kept from your earlier souls', kept)}
-      </DataState>
-      <Link
-        to="/agents"
-        className="inline-flex min-h-11 items-center self-start rounded-lg border border-edge bg-bg px-4 py-2 hover:bg-surface"
-      >
-        Cancel
-      </Link>
-    </div>
+    <>
+      <PageHeader
+        title="New agent"
+        description="Choose a role to start from. You get the agent's Markdown file with that role's instructions, ready to name and connect."
+      />
+      <PageBody>
+        <DataState
+          what="the role templates"
+          isLoading={templates.isPending}
+          error={templates.error}
+          isEmpty={templates.isSuccess && templates.data.length === 0}
+          empty={<p>No role templates are available. Reload the page.</p>}
+          onRetry={() => void templates.refetch()}
+        >
+          {group('Roles', shipped)}
+          {kept.length > 0 && group('Kept from your earlier souls', kept)}
+        </DataState>
+        <Link
+          to="/agents"
+          className="inline-flex min-h-11 items-center self-start rounded-control border border-control bg-surface px-4 font-semibold text-fg hover:bg-bg"
+        >
+          Cancel
+        </Link>
+      </PageBody>
+    </>
   );
 }
 
@@ -299,154 +306,165 @@ function Editor({ agent, initial }: { agent: Agent | null; initial: string }) {
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1>{agent ? agent.name : 'New agent'}</h1>
-        {agent && <StatusBadge status={agent.readiness} />}
-      </div>
-      {agent && agent.reasons.length > 0 && (
-        <ul
-          className="m-0 list-disc rounded-lg border border-warning bg-warning-soft p-3 pl-8 text-warning"
-          aria-label="Why this agent is not ready"
-        >
-          {agent.reasons.map((reason) => (
-            <li key={reason.code}>{reason.message}</li>
-          ))}
-        </ul>
-      )}
-      {serverError && (
-        <div
-          role="alert"
-          className="flex flex-col gap-2 rounded-lg border border-danger bg-danger-soft p-3 text-danger"
-        >
-          <p>{serverError}</p>
-          {stale !== null && (
-            <>
-              <Button className="self-start" onClick={() => void reload()}>
-                Reload
-              </Button>
-              <TextArea
-                label="Your unsaved text (copy it before or after reloading)"
-                value={stale}
-                maxLength={maxAgentFileLength}
-                readOnly
-                rows={6}
-                className="font-mono text-sm"
-              />
-            </>
-          )}
-        </div>
-      )}
-      <form
-        noValidate
-        className="flex max-w-3xl flex-col gap-4"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void save();
-        }}
-      >
-        <AgentFileEditor
-          value={text}
-          onChange={edit}
-          serverProblems={serverProblems}
-        />
-        <div className="flex flex-col gap-3 rounded-lg border border-edge-soft p-3">
-          <p className="text-sm text-muted">
-            These helpers write into the header for you.
-          </p>
-          <Select
-            label={`Insert connection (${providerName[provider]})`}
-            value={connection?.id}
-            onValueChange={(id) => {
-              const chosen = providerConnections.find((c) => c.id === id);
-              if (chosen) edit(setHeaderValue(text, 'connection', chosen.name));
-            }}
-            options={providerConnections.map((c) => ({
-              value: c.id,
-              label:
-                c.status === 'needs_relogin'
-                  ? `${c.name} (needs re-login)`
-                  : c.name,
-            }))}
-            placeholder={
-              providerConnections.length === 0
-                ? `No ${providerName[provider]} connection yet`
-                : 'Choose a connection'
-            }
-          />
-          {connections.isSuccess && providerConnections.length === 0 && (
-            <p className="text-sm">
-              {provider === 'claude'
-                ? 'Claude connects with your own Anthropic API key. '
-                : 'Codex connects through a sign-in sandbox. '}
-              <Link to="/settings/providers" className="underline">
-                Connect {providerName[provider]}
-              </Link>
-            </p>
-          )}
-          <Select
-            label="Insert model"
-            value={
-              available.some((m) => m.id === headerValue(text, 'model'))
-                ? headerValue(text, 'model')
-                : undefined
-            }
-            onValueChange={(model) =>
-              edit(setHeaderValue(text, 'model', model))
-            }
-            options={available.map((m) => ({ value: m.id, label: m.label }))}
-            disabled={
-              connectionId === '' ||
-              candidates.isPending ||
-              available.length === 0
-            }
-            placeholder={
-              connectionId === ''
-                ? 'Insert a connection first'
-                : available.length === 0
-                  ? 'No verified model yet'
-                  : 'Choose a verified model'
-            }
-            hint="Only models verified for this connection are offered."
-          />
-          {roleTemplate && (
-            <Button className="self-start" onClick={() => setReplacing(true)}>
-              Replace instructions with the {roleLabels[roleTemplate.role]}{' '}
-              template
-            </Button>
-          )}
-        </div>
-        {connectionId !== '' && (
-          <DataState
-            what="the models for this connection"
-            isLoading={candidates.isPending}
-            error={candidates.error}
-            isEmpty={false}
-            empty={null}
-            onRetry={() => void candidates.refetch()}
+    <>
+      <PageHeader
+        title={agent ? agent.name : 'New agent'}
+        description={
+          agent
+            ? 'Its Markdown file: the settings header, then its instructions.'
+            : 'Name it, connect it, and save.'
+        }
+        action={agent && <StatusBadge status={agent.readiness} />}
+      />
+      <PageBody>
+        {agent && agent.reasons.length > 0 && (
+          <ul
+            className="m-0 list-disc rounded-card border border-status-attention bg-status-attention-soft p-4 pl-8 text-status-attention"
+            aria-label="Why this agent is not ready"
           >
-            {candidates.data && (
-              <ModelList
-                connectionId={connectionId}
-                catalogRevision={candidates.data.catalogRevision}
-                models={candidates.data.models}
-                queryClient={queryClient}
-              />
-            )}
-          </DataState>
+            {agent.reasons.map((reason) => (
+              <li key={reason.code}>{reason.message}</li>
+            ))}
+          </ul>
         )}
-        <div className="flex flex-wrap gap-2">
-          <Button type="submit" variant="primary" busy={saving}>
-            {agent ? 'Save changes' : 'Create agent'}
-          </Button>
-          <Link
-            to="/agents"
-            className="inline-flex min-h-11 items-center rounded-lg border border-edge bg-bg px-4 py-2 hover:bg-surface"
+        {serverError && (
+          <div
+            role="alert"
+            className="flex flex-col gap-2 rounded-card border border-status-failed bg-status-failed-soft p-4 text-status-failed"
           >
-            Cancel
-          </Link>
-        </div>
-      </form>
+            <p>{serverError}</p>
+            {stale !== null && (
+              <>
+                <Button className="self-start" onClick={() => void reload()}>
+                  Reload
+                </Button>
+                <TextArea
+                  label="Your unsaved text (copy it before or after reloading)"
+                  value={stale}
+                  maxLength={maxAgentFileLength}
+                  readOnly
+                  rows={6}
+                  className="font-mono text-secondary"
+                />
+              </>
+            )}
+          </div>
+        )}
+        <form
+          noValidate
+          className="flex flex-col gap-6"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void save();
+          }}
+        >
+          <Card>
+            <AgentFileEditor
+              value={text}
+              onChange={edit}
+              serverProblems={serverProblems}
+            />
+          </Card>
+          <Card className="flex flex-col gap-4">
+            <h2 className="text-section">Connection and model</h2>
+            <p className="text-secondary text-muted">
+              These helpers write into the header for you.
+            </p>
+            <Select
+              label={`Insert connection (${providerName[provider]})`}
+              value={connection?.id}
+              onValueChange={(id) => {
+                const chosen = providerConnections.find((c) => c.id === id);
+                if (chosen)
+                  edit(setHeaderValue(text, 'connection', chosen.name));
+              }}
+              options={providerConnections.map((c) => ({
+                value: c.id,
+                label:
+                  c.status === 'needs_relogin'
+                    ? `${c.name} (needs re-login)`
+                    : c.name,
+              }))}
+              placeholder={
+                providerConnections.length === 0
+                  ? `No ${providerName[provider]} connection yet`
+                  : 'Choose a connection'
+              }
+            />
+            {connections.isSuccess && providerConnections.length === 0 && (
+              <p className="text-secondary">
+                {provider === 'claude'
+                  ? 'Claude connects with your own Anthropic API key. '
+                  : 'Codex connects through a sign-in sandbox. '}
+                <Link to="/settings/providers" className="underline">
+                  Connect {providerName[provider]}
+                </Link>
+              </p>
+            )}
+            <Select
+              label="Insert model"
+              value={
+                available.some((m) => m.id === headerValue(text, 'model'))
+                  ? headerValue(text, 'model')
+                  : undefined
+              }
+              onValueChange={(model) =>
+                edit(setHeaderValue(text, 'model', model))
+              }
+              options={available.map((m) => ({ value: m.id, label: m.label }))}
+              disabled={
+                connectionId === '' ||
+                candidates.isPending ||
+                available.length === 0
+              }
+              placeholder={
+                connectionId === ''
+                  ? 'Insert a connection first'
+                  : available.length === 0
+                    ? 'No verified model yet'
+                    : 'Choose a verified model'
+              }
+              hint="Only models verified for this connection are offered."
+            />
+            {roleTemplate && (
+              <Button className="self-start" onClick={() => setReplacing(true)}>
+                Replace instructions with the {roleLabels[roleTemplate.role]}{' '}
+                template
+              </Button>
+            )}
+          </Card>
+          {connectionId !== '' && (
+            <DataState
+              what="the models for this connection"
+              isLoading={candidates.isPending}
+              error={candidates.error}
+              isEmpty={false}
+              empty={null}
+              onRetry={() => void candidates.refetch()}
+            >
+              {candidates.data && (
+                <ModelList
+                  connectionId={connectionId}
+                  catalogRevision={candidates.data.catalogRevision}
+                  models={candidates.data.models}
+                  queryClient={queryClient}
+                />
+              )}
+            </DataState>
+          )}
+          <div className="flex flex-wrap gap-2">
+            <Button type="submit" variant="primary" busy={saving}>
+              {agent ? 'Save changes' : 'Create agent'}
+            </Button>
+            <Link
+              to="/agents"
+              className="inline-flex min-h-11 items-center rounded-control border border-control bg-surface px-4 font-semibold text-fg hover:bg-bg"
+            >
+              Cancel
+            </Link>
+          </div>
+        </form>
+      </PageBody>
       <ConfirmDialog
         open={replacing}
         onOpenChange={setReplacing}
@@ -472,7 +490,7 @@ function Editor({ agent, initial }: { agent: Agent | null; initial: string }) {
         destructive
         onConfirm={() => blocker.proceed?.()}
       />
-    </div>
+    </>
   );
 }
 

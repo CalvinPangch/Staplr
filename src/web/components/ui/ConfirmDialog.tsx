@@ -32,9 +32,9 @@ export function ConfirmDialog({
   return (
     <AlertDialog.Root open={open} onOpenChange={onOpenChange}>
       <AlertDialog.Portal>
-        <AlertDialog.Overlay className="fixed inset-0 z-40 bg-black/50" />
+        <AlertDialog.Overlay className="fixed inset-0 z-40 bg-black/40" />
         <AlertDialog.Content className={dialogContent}>
-          <AlertDialog.Title className="text-lg font-semibold">
+          <AlertDialog.Title className="text-section font-semibold">
             {title}
           </AlertDialog.Title>
           <AlertDialog.Description className="mt-1 text-muted">
@@ -46,7 +46,8 @@ export function ConfirmDialog({
               <Button variant="secondary">{cancelLabel}</Button>
             </AlertDialog.Cancel>
             <Button
-              variant={destructive ? 'danger' : 'primary'}
+              variant={destructive ? 'destructive' : 'primary'}
+              filled={destructive}
               busy={busy}
               onClick={onConfirm}
             >

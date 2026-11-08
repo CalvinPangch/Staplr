@@ -143,14 +143,14 @@ export function TeamRoster({ projectId }: { projectId: string }) {
   return (
     <section aria-labelledby="team-heading" className="flex flex-col gap-3">
       <h2 id="team-heading">Team</h2>
-      <p className="text-sm text-muted">
+      <p className="text-secondary text-muted">
         Every team needs exactly one Project Manager: they read each ticket and
         hand it to the next agent. One agent can serve on several projects.
       </p>
       {error && (
         <p
           role="alert"
-          className="rounded-lg border border-danger bg-danger-soft p-3 text-danger"
+          className="rounded-card border border-status-failed bg-status-failed-soft p-4 text-status-failed"
         >
           {error}
         </p>
@@ -158,7 +158,7 @@ export function TeamRoster({ projectId }: { projectId: string }) {
       {finished && (
         <p
           role="status"
-          className="rounded-lg border border-edge-soft bg-surface p-3"
+          className="rounded-card border border-separator bg-surface p-4"
         >
           {finished.readiness === 'ready'
             ? 'Setup finished. This project is Ready.'
@@ -178,7 +178,7 @@ export function TeamRoster({ projectId }: { projectId: string }) {
             {team.data.missingRoleWarnings.length > 0 && (
               <p
                 role="note"
-                className="rounded-lg border border-warning bg-warning-soft p-3 text-sm text-warning"
+                className="rounded-card border border-status-attention bg-status-attention-soft p-4 text-secondary text-status-attention"
               >
                 No{' '}
                 {team.data.missingRoleWarnings
@@ -194,9 +194,9 @@ export function TeamRoster({ projectId }: { projectId: string }) {
                 {members.map((member) => (
                   <li
                     key={member.id}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-edge-soft bg-surface p-3"
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-control border border-separator bg-surface p-3"
                   >
-                    <div className="flex flex-col text-sm">
+                    <div className="flex flex-col text-secondary">
                       <Link
                         to="/agents/$agentId"
                         params={{ agentId: member.id }}
@@ -249,7 +249,7 @@ export function TeamRoster({ projectId }: { projectId: string }) {
         </Button>
       </div>
       {agents.isSuccess && (agents.data ?? []).length === 0 && (
-        <p className="text-sm">
+        <p className="text-secondary">
           There are no agents yet.{' '}
           <Link
             to="/agents/$agentId"

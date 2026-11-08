@@ -30,13 +30,13 @@ export function Column({
       aria-labelledby={headingId}
       data-testid={`column-${status}`}
       className={cn(
-        'board-column flex min-w-0 flex-col gap-3 rounded-lg border border-edge-soft bg-surface p-3',
-        isOver && 'ring-2 ring-primary',
+        'flex min-w-0 flex-col gap-3 rounded-card bg-surface-raised p-3',
+        isOver && 'ring-2 ring-accent',
       )}
     >
-      <h2 id={headingId} className="m-0 flex items-baseline gap-2 text-base">
+      <h2 id={headingId} className="m-0 flex items-baseline gap-2 text-body">
         {label}
-        <span className="text-sm font-normal text-muted">
+        <span className="text-secondary font-normal text-muted">
           {tickets.length} {tickets.length === 1 ? 'ticket' : 'tickets'}
         </span>
       </h2>
@@ -62,7 +62,7 @@ export function Column({
         </ul>
       </SortableContext>
       {tickets.length === 0 && (
-        <p className="m-0 text-sm text-muted">No tickets in {label}.</p>
+        <p className="m-0 text-secondary text-muted">No tickets in {label}.</p>
       )}
     </section>
   );
