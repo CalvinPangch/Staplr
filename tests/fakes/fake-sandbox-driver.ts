@@ -33,6 +33,10 @@ export interface FakeSandboxDriver extends SandboxDriver {
   failCreate: boolean;
   /** while set, every model probe waits for it (to observe discovery in progress) */
   probeGate: Promise<void> | null;
+  /** simulate a temporary Codex outage: status, list and probes exit 75 */
+  outage: boolean;
+  /** when set, every login lists exactly these models (the account changed) */
+  listedModels: string[] | null;
 }
 
 const ok = (stdout: Buffer = Buffer.alloc(0)): ExecResult => ({
@@ -79,6 +83,8 @@ export function createFakeSandboxDriver(): FakeSandboxDriver {
     commands,
     failCreate: false,
     probeGate: null,
+    outage: false,
+    listedModels: null,
     live: () =>
       [...containers.values()].filter((c) => !c.removed).map((c) => c.id),
     revokeAll() {
@@ -162,12 +168,18 @@ export function createFakeSandboxDriver(): FakeSandboxDriver {
         container.authJson = content.toString('utf8');
         return ok();
       }
+      if (
+        driver.outage &&
+        ['stub-models', 'stub-status', 'stub-probe'].includes(program ?? '')
+      )
+        return exit(75);
       if (program === 'stub-models') {
         const state = container.authJson ? parse(container.authJson) : {};
         if (state.transient) return exit(75);
         // models=- means the login can use no model at all
-        const listed =
-          state.models?.[0] === '-'
+        const listed = driver.listedModels
+          ? driver.listedModels
+          : state.models?.[0] === '-'
             ? []
             : state.models?.length
               ? state.models

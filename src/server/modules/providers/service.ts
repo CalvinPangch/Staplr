@@ -47,10 +47,8 @@ const messages = {
   codexUnavailable:
     'Could not run the Codex check right now. It will be checked again.',
   noDocker: 'Docker is not available, so this login could not be checked.',
-  listUnreadable:
-    'Could not read the model list from Codex. Use Refresh models to try again.',
-  discoveryUnavailable:
-    'Could not reach Codex to find your models. Use Refresh models to try again.',
+  discoveryRetry:
+    'Last refresh failed; it will be retried at the next hourly check. Use Refresh models to try now.',
   discoveryNoDocker:
     'Docker is not available, so your models could not be found. Start Docker, then use Refresh models.',
   unavailable:
@@ -334,7 +332,7 @@ export function createProviderService({
   /** Discovery runs in progress, with the models answered so far in each run. */
   const discoveries = new Map<
     string,
-    { done: Promise<void>; answered: Set<string> }
+    { done: Promise<void>; answered: Set<string>; revision: number }
   >();
 
   function setDiscovery(
@@ -394,13 +392,8 @@ export function createProviderService({
         return;
       }
       if (result.auth === 'unavailable' || !result.models) {
-        setDiscovery(
-          row.id,
-          'failed',
-          result.auth === 'ok'
-            ? messages.listUnreadable
-            : messages.discoveryUnavailable,
-        );
+        // Only a clear answer changes anything; the last good list stays.
+        setDiscovery(row.id, 'failed', messages.discoveryRetry);
         return;
       }
       db.prepare(
@@ -452,18 +445,24 @@ export function createProviderService({
     id: string,
     options: { listOnly?: boolean } = {},
   ): Promise<void> {
-    const running = discoveries.get(id);
-    if (running) return running.done;
     const row = find(id);
     if (!row || row.authType !== 'codex_login') return Promise.resolve();
+    const running = discoveries.get(id);
+    if (running && running.revision === row.credentialRevision)
+      return running.done;
+    if (running) return running.done.then(() => startDiscovery(id, options));
     setDiscovery(id, 'running', null);
     const answered = new Set<string>();
     const done = runDiscovery(row, answered, options.listOnly ?? false)
       .catch(() => {
-        if (find(id)) setDiscovery(id, 'failed', messages.discoveryUnavailable);
+        if (find(id)) setDiscovery(id, 'failed', messages.discoveryRetry);
       })
       .finally(() => discoveries.delete(id));
-    discoveries.set(id, { done, answered });
+    discoveries.set(id, {
+      done,
+      answered,
+      revision: row.credentialRevision,
+    });
     return done;
   }
 
@@ -759,6 +758,34 @@ export function createProviderService({
     },
     async check(id: string): Promise<ProviderConnection> {
       await checkRow(requireRow(id));
+      const row = requireRow(id);
+      if (row.authType === 'codex_login' && row.status === 'connected')
+        void startDiscovery(id);
+      return toPublic(requireRow(id));
+    },
+
+    /** "Refresh models": find the models again now (feature 002). */
+    discover(id: string): ProviderConnection {
+      const row = requireRow(id);
+      if (row.authType !== 'codex_login')
+        throw new ServiceError(
+          409,
+          'conflict',
+          'Only Codex connections find their models this way. Claude models come from the API key.',
+        );
+      if (row.status === 'needs_relogin')
+        throw new ServiceError(
+          409,
+          'conflict',
+          'This login needs Re-login before its models can be found.',
+        );
+      if (!codex)
+        throw new ServiceError(
+          503,
+          'docker_unavailable',
+          'Docker is not available, so your models could not be found. Start Docker, then try again.',
+        );
+      void startDiscovery(id);
       return toPublic(requireRow(id));
     },
 
@@ -788,7 +815,15 @@ export function createProviderService({
         await Promise.all(
           ids.slice(i, i + batchSize).map(async (id) => {
             const row = find(id);
-            if (row) await checkRow(row);
+            if (!row) return;
+            await checkRow(row);
+            // Codex: re-list for free; only models agents use were probed above.
+            const after = find(id);
+            if (
+              after?.authType === 'codex_login' &&
+              after.status === 'connected'
+            )
+              await startDiscovery(id, { listOnly: true });
           }),
         );
     },

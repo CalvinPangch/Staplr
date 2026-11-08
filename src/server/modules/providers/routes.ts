@@ -110,6 +110,16 @@ export function providerRoutes(app: FastifyInstance, service: ProviderService) {
     }
   });
 
+  app.post(`${base}/:id/discover`, (request, reply) => {
+    const params = idParams.safeParse(request.params);
+    if (!params.success) return invalid(reply, params.error);
+    try {
+      return reply.code(202).send(service.discover(params.data.id));
+    } catch (error) {
+      return fail(reply, error);
+    }
+  });
+
   app.post(`${base}/:id/models/:model/check`, async (request, reply) => {
     const params = modelParams.safeParse(request.params);
     if (!params.success) return invalid(reply, params.error);
