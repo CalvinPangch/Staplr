@@ -128,6 +128,26 @@ describe('adding a connection', () => {
     const reply = await add('down', 'ghp_down');
     expect(reply.statusCode).toBe(503);
     expect(reply.json().code).toBe('provider_unavailable');
+    // GitHub did answer, so the message says what it answered instead of "could not reach"
+    expect(reply.json().message).toMatch(/GitHub answered with HTTP 503/);
+    expect(rows()).toHaveLength(0);
+  });
+
+  it('ignores spaces and line breaks around a pasted token', async () => {
+    f.fake.github.setToken('ghp_padded1234', classic());
+    const reply = await add('padded', '  ghp_padded1234\n');
+    expect(reply.statusCode).toBe(201);
+    expect(reply.json().tokenLast4).toBe('1234');
+  });
+
+  it('refuses a token with an invisible or non-token character, without contacting the platform', async () => {
+    f.fake.github.setToken('ghp_zero', classic());
+    for (const token of ['ghp_\u200bzero', 'ghp_ze ro', 'ghp_zéro']) {
+      const reply = await add('odd', token);
+      expect(reply.statusCode).toBe(422);
+      expect(reply.json().code).toBe('invalid_input');
+      expect(reply.json().message).toMatch(/Copy the token again/);
+    }
     expect(rows()).toHaveLength(0);
   });
 
@@ -383,7 +403,9 @@ describe('checking connections', () => {
       status: 'connected',
       lastCheckedAt: '2026-11-08T00:02:00.000Z',
     });
-    expect(reply.json().lastCheckResult).toMatch(/could not reach/i);
+    expect(reply.json().lastCheckResult).toMatch(
+      /GitHub answered with HTTP 503.*checked again/,
+    );
   });
 
   it('check-all answers 202 and re-checks every connection', async () => {

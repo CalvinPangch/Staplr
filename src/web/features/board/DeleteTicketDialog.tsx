@@ -41,7 +41,7 @@ export function DeleteTicketDialog({
       }}
     >
       {error && (
-        <p role="alert" className="text-danger">
+        <p role="alert" className="text-status-failed">
           {error}
         </p>
       )}

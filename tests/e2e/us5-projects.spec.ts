@@ -8,6 +8,7 @@ import {
   setFakeGithubToken,
 } from './fixtures';
 import { createGitRemote, type GitRemote } from '../fakes/git-remote';
+import { createAgent } from './agent-file';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -50,13 +51,14 @@ async function addGithubConnection(page: Page) {
   await expect(card(page, 'Projects GH')).toContainText('Connected');
 }
 
-async function addClaudeAgent(page: Page, name: string, soul: RegExp) {
-  await page.goto('/agents/new');
-  await page.getByLabel('Name').fill(name);
-  await choose(page, 'Soul', soul);
-  await choose(page, 'Connection', 'Projects Claude');
-  await choose(page, 'Model', 'Claude Sonnet 5.5');
-  await page.getByRole('button', { name: 'Create agent' }).click();
+/** Feature 003: agents are created from a role template as one Markdown file. */
+async function addClaudeAgent(page: Page, name: string, template: string) {
+  await createAgent(page, {
+    template,
+    name,
+    connection: 'Projects Claude',
+    model: 'Claude Sonnet 5.5',
+  });
   await expect(card(page, name).getByText('Ready')).toBeVisible();
 }
 
@@ -90,17 +92,9 @@ test('prepares a repository host, a Claude connection and agents', async ({
   await dialog.getByLabel('Anthropic API key').fill(claudeKey);
   await dialog.getByRole('button', { name: 'Add connection' }).click();
   await expect(card(page, 'Projects Claude')).toContainText('Connected');
-  await addClaudeAgent(
-    page,
-    'Project lead',
-    /Project Manager \(Project Manager\)/,
-  );
-  await addClaudeAgent(
-    page,
-    'Backup lead',
-    /Project Manager \(Project Manager\)/,
-  );
-  await addClaudeAgent(page, 'Coder', /Developer \(Developer\)/);
+  await addClaudeAgent(page, 'Project lead', 'Project Manager');
+  await addClaudeAgent(page, 'Backup lead', 'Project Manager');
+  await addClaudeAgent(page, 'Coder', 'Developer');
 });
 
 test('starts with an empty project list', async ({ page }) => {
@@ -279,7 +273,9 @@ test('relinks a renamed repository after the old one disappears', async ({
   await dialog.getByRole('combobox', { name: 'Repository' }).fill('renamed');
   await dialog.getByRole('option', { name: /octo\/shop-renamed/ }).click();
   await dialog.getByRole('button', { name: 'Relink repository' }).click();
-  await expect(page.getByText('octo/shop-renamed')).toBeVisible();
+  await expect(
+    page.locator('main').getByText('octo/shop-renamed'),
+  ).toBeVisible();
   await expect(page.getByText('Downloaded').first()).toBeVisible({
     timeout: 30000,
   });
@@ -300,9 +296,7 @@ test('deletes a project after a confirmation that says what goes and what stays'
   await expect(dialog).toContainText('This removes:');
   await expect(dialog).toContainText('the downloaded repository');
   await expect(dialog).toContainText('This keeps:');
-  await expect(dialog).toContainText(
-    'your agents, souls and provider connections',
-  );
+  await expect(dialog).toContainText('your agents and provider connections');
   await axeCheck(page);
   await dialog.getByRole('button', { name: 'Delete project' }).click();
   await expect(page).toHaveURL(/\/projects$/);

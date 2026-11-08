@@ -110,8 +110,8 @@ describe('pickers and lists', () => {
         })
       ).json().id as string;
       const insert = f.db.prepare(
-        `INSERT INTO agent(id,name,soulId,provider,providerConnectionId,model,createdAt,updatedAt)
-         VALUES(?,?,'default-developer','claude',?,'claude-sonnet-5-5','2026-11-08T00:00:00Z','2026-11-08T00:00:00Z')`,
+        `INSERT INTO agent(id,name,role,provider,providerConnectionId,model,definition,createdAt,updatedAt)
+         VALUES(?,?,'developer','claude',?,'claude-sonnet-5-5','---','2026-11-08T00:00:00Z','2026-11-08T00:00:00Z')`,
       );
       f.db.transaction(() => {
         for (let i = 0; i < 100; i++)
@@ -143,8 +143,8 @@ describe('pickers and lists', () => {
       ).json().id as string;
       const at = '2026-11-08T00:00:00Z';
       const agent = f.db.prepare(
-        `INSERT INTO agent(id,name,soulId,provider,providerConnectionId,model,createdAt,updatedAt)
-         VALUES(?,?,'default-developer','claude',?,'claude-sonnet-5-5',?,?)`,
+        `INSERT INTO agent(id,name,role,provider,providerConnectionId,model,definition,createdAt,updatedAt)
+         VALUES(?,?,'developer','claude',?,'claude-sonnet-5-5','---',?,?)`,
       );
       const project = f.db.prepare(
         `INSERT INTO project(id,name,repoFullName,repoRemoteId,baseBranch,downloadStatus,createdAt,updatedAt)

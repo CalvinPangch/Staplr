@@ -6,19 +6,16 @@ import {
   useRouterState,
   type ErrorComponentProps,
 } from '@tanstack/react-router';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { fetchProjects, projectsKey } from '../features/projects/api';
+import { useQueryClient } from '@tanstack/react-query';
 import { api, errorMessage } from '../lib/api';
 import { readTheme, saveTheme, type ThemeChoice } from '../lib/theme';
 import { Button } from '../components/ui/Button';
+import { PageBody, PageHeader } from '../components/ui/PageHeader';
+import { Brand, Sidebar } from '../components/ui/nav/Sidebar';
+import { TabBar } from '../components/ui/nav/TabBar';
 
 const publicPaths = ['/setup', '/sign-in'];
 const localHosts = ['localhost', '127.0.0.1', '[::1]'];
-
-const navItems = [
-  { to: '/projects', label: 'Projects' },
-  { to: '/settings', label: 'Settings' },
-] as const;
 
 function InsecureBanner() {
   const insecure =
@@ -28,7 +25,7 @@ function InsecureBanner() {
   return (
     <div
       role="alert"
-      className="border-b border-warning bg-warning-soft px-4 py-2 text-sm text-warning"
+      className="border-b border-status-attention bg-status-attention-soft px-4 py-2 text-secondary text-status-attention"
     >
       This connection is not encrypted. Passwords and tokens you enter can be
       read on the network. Use an https:// address.
@@ -39,7 +36,7 @@ function InsecureBanner() {
 export function ThemeSelect() {
   const [choice, setChoice] = useState<ThemeChoice>(readTheme);
   return (
-    <label className="flex items-center gap-2 text-sm">
+    <label className="flex items-center gap-2 text-secondary">
       Theme
       <select
         value={choice}
@@ -48,7 +45,7 @@ export function ThemeSelect() {
           setChoice(next);
           saveTheme(next);
         }}
-        className="min-h-11 rounded-lg border border-edge bg-bg px-2 text-fg"
+        className="min-h-11 rounded-control border border-control bg-surface px-2 text-fg"
       >
         <option value="system">System</option>
         <option value="light">Light</option>
@@ -85,120 +82,40 @@ export function SignOutButton() {
 export function AppShell() {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const signedIn = !publicPaths.includes(path);
-  const projects = useQuery({
-    queryKey: projectsKey,
-    queryFn: fetchProjects,
-    enabled: signedIn,
-  });
-  const isSettingsPath = [
-    '/settings',
-    '/souls',
-    '/agents',
-    '/audit',
-    '/diagnostics',
-  ].some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
-  const currentSection = isSettingsPath
-    ? 'Settings'
-    : path.startsWith('/projects')
-      ? 'Projects'
-      : 'Overview';
-  const brand = (
-    <>
-      <span className="app-brand-mark" aria-hidden="true">
-        S
-      </span>
-      <span>
-        <strong>Staplr</strong>
-        <small>TEAM WORKSPACE</small>
-      </span>
-    </>
+  const skip = (
+    <a
+      href="#main"
+      className="sr-only focus:not-sr-only focus:fixed focus:left-2 focus:top-2 focus:z-50 focus:rounded-control focus:bg-surface focus:px-4 focus:py-2 focus:text-fg"
+    >
+      Skip to main content
+    </a>
   );
-  return (
-    <>
-      <a
-        href="#main"
-        className="sr-only focus:not-sr-only focus:fixed focus:left-2 focus:top-2 focus:z-50 focus:rounded-lg focus:bg-bg focus:px-4 focus:py-2 focus:text-fg"
-      >
-        Skip to main content
-      </a>
-      <InsecureBanner />
-      <div className="app-layout">
-        <header className="app-sidebar">
-          {signedIn ? (
-            <Link to="/" className="app-brand" aria-label="Staplr home">
-              {brand}
-            </Link>
-          ) : (
-            <div className="app-brand">{brand}</div>
-          )}
-          {signedIn && (
-            <nav
-              id="workspace-navigation"
-              aria-label="Main"
-              className="app-nav"
-            >
-              <p className="app-nav-label">WORKSPACE</p>
-              <ul>
-                {navItems.map((item) => (
-                  <li key={item.to}>
-                    <Link
-                      to={item.to}
-                      className="app-nav-link"
-                      activeProps={{
-                        'aria-current': 'page',
-                        className: 'app-nav-link active',
-                      }}
-                    >
-                      <span className="app-nav-dot" aria-hidden="true" />
-                      {item.label}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-              <p className="app-nav-label mt-6">YOUR PROJECTS</p>
-              {projects.isPending ? (
-                <p className="sidebar-message">Loading projects…</p>
-              ) : projects.isError ? (
-                <p className="sidebar-message">Could not load projects.</p>
-              ) : projects.data?.length ? (
-                <ul>
-                  {projects.data.map((project) => (
-                    <li key={project.id}>
-                      <Link
-                        to="/projects/$projectId"
-                        params={{ projectId: project.id }}
-                        className="app-nav-link project-nav-link"
-                        activeProps={{
-                          'aria-current': 'page',
-                          className: 'app-nav-link project-nav-link active',
-                        }}
-                      >
-                        <span className="app-nav-dot" aria-hidden="true" />
-                        <span>{project.name}</span>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="sidebar-message">No projects yet.</p>
-              )}
-            </nav>
-          )}
-          {!signedIn && (
-            <div className="app-sidebar-footer">
-              <ThemeSelect />
-            </div>
-          )}
-        </header>
-        <div className="app-content">
-          <div className="app-topbar">
-            <span>YOUR WORKSPACE</span>
-            <span>Staplr / {currentSection}</span>
+  if (!signedIn)
+    return (
+      <>
+        {skip}
+        <InsecureBanner />
+        <div className="flex min-h-screen flex-col items-center gap-8 px-4 py-6">
+          <div className="flex w-full max-w-md flex-wrap items-center justify-between gap-3">
+            <Brand />
+            <ThemeSelect />
           </div>
-          <main id="main" tabIndex={-1} className="app-main">
+          <main id="main" tabIndex={-1} className="w-full max-w-md">
             <Outlet />
           </main>
         </div>
+      </>
+    );
+  return (
+    <>
+      {skip}
+      <InsecureBanner />
+      <div className="shell">
+        <Sidebar />
+        <main id="main" tabIndex={-1} className="shell-main px-4 pb-8 md:px-8">
+          <Outlet />
+        </main>
+        <TabBar />
       </div>
     </>
   );
@@ -210,7 +127,7 @@ export function StartError({ error }: ErrorComponentProps) {
     <main id="main" className="mx-auto w-full max-w-5xl p-4">
       <div
         role="alert"
-        className="flex flex-col items-start gap-3 rounded-lg border border-danger bg-danger-soft p-4 text-danger"
+        className="flex flex-col items-start gap-3 rounded-control border border-status-failed bg-status-failed-soft p-4 text-status-failed"
       >
         <p className="font-medium">
           Could not start Staplr. {errorMessage(error)}
@@ -235,12 +152,19 @@ export function Pending() {
 
 export function NotFound() {
   return (
-    <div className="flex flex-col items-start gap-3">
-      <h1>Page not found</h1>
-      <p>That page does not exist. Go back to the start page.</p>
-      <Link to="/" className="min-h-11 py-2">
-        Go to the start page
-      </Link>
-    </div>
+    <>
+      <PageHeader
+        title="Page not found"
+        description="That page does not exist. Go back to the start page."
+      />
+      <PageBody>
+        <Link
+          to="/"
+          className="inline-flex min-h-11 items-center self-start rounded-control border border-control bg-surface px-4 font-semibold text-fg hover:bg-bg"
+        >
+          Go to the start page
+        </Link>
+      </PageBody>
+    </>
   );
 }

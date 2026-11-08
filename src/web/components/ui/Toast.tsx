@@ -27,9 +27,9 @@ export function useToast() {
 }
 
 const tones = {
-  success: 'border-success bg-success-soft',
-  error: 'border-danger bg-danger-soft',
-  info: 'border-edge bg-surface',
+  success: 'border-status-good bg-status-good-soft',
+  error: 'border-status-failed bg-status-failed-soft',
+  info: 'border-control bg-surface',
 };
 
 export function ToastProvider({ children }: { children: ReactNode }) {
@@ -54,7 +54,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 setItems((current) => current.filter((i) => i.id !== item.id));
             }}
             className={cn(
-              'rounded-lg border p-4 text-fg shadow-lg',
+              'rounded-card border p-4 text-fg shadow-card',
               tones[item.tone ?? 'info'],
             )}
           >
@@ -62,11 +62,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               {item.title}
             </RadixToast.Title>
             {item.description && (
-              <RadixToast.Description className="mt-1 text-sm">
+              <RadixToast.Description className="mt-1 text-secondary">
                 {item.description}
               </RadixToast.Description>
             )}
-            <RadixToast.Close className="mt-2 min-h-11 rounded-lg border border-edge bg-bg px-3 text-sm">
+            <RadixToast.Close className="mt-2 min-h-11 rounded-control border border-control bg-surface px-3 text-secondary">
               Dismiss
             </RadixToast.Close>
           </RadixToast.Root>

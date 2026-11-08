@@ -1,5 +1,6 @@
 import { useId } from 'react';
 import * as RadixSelect from '@radix-ui/react-select';
+import { ChevronDown } from 'lucide-react';
 import { cn } from '../../lib/cn';
 
 export interface SelectOption {
@@ -37,7 +38,7 @@ export function Select({
     undefined;
   return (
     <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-sm font-medium">
+      <label htmlFor={id} className="text-secondary font-medium">
         {label}
       </label>
       <RadixSelect.Root
@@ -50,19 +51,19 @@ export function Select({
           aria-invalid={error ? true : undefined}
           aria-describedby={describedBy}
           className={cn(
-            'flex min-h-11 items-center justify-between gap-2 rounded-lg border bg-bg px-3 py-2 text-left text-fg',
+            'flex min-h-11 items-center justify-between gap-2 rounded-control border bg-surface px-3 py-2 text-left text-fg',
             'disabled:cursor-not-allowed disabled:opacity-60',
-            error ? 'border-danger' : 'border-edge',
+            error ? 'border-status-failed' : 'border-control',
           )}
         >
           <RadixSelect.Value placeholder={placeholder} />
-          <span aria-hidden="true">▾</span>
+          <ChevronDown aria-hidden="true" className="size-4 text-muted" />
         </RadixSelect.Trigger>
         <RadixSelect.Portal>
           <RadixSelect.Content
             position="popper"
             sideOffset={4}
-            className="z-50 max-h-72 min-w-[var(--radix-select-trigger-width)] overflow-y-auto rounded-lg border border-edge bg-bg p-1 shadow-lg"
+            className="z-50 max-h-72 min-w-[var(--radix-select-trigger-width)] overflow-y-auto rounded-card border border-separator bg-surface-raised p-1 shadow-card"
           >
             <RadixSelect.Viewport>
               {options.map((option) => (
@@ -70,7 +71,7 @@ export function Select({
                   key={option.value}
                   value={option.value}
                   disabled={option.disabled ?? false}
-                  className="flex min-h-11 cursor-pointer items-center gap-2 rounded px-3 py-2 text-fg data-[disabled]:cursor-not-allowed data-[disabled]:opacity-60 data-[highlighted]:bg-surface-strong"
+                  className="flex min-h-11 cursor-pointer items-center gap-2 rounded-control px-3 py-2 text-fg data-[disabled]:cursor-not-allowed data-[disabled]:opacity-60 data-[highlighted]:bg-accent-soft"
                 >
                   <RadixSelect.ItemText>{option.label}</RadixSelect.ItemText>
                   <RadixSelect.ItemIndicator aria-hidden="true">
@@ -83,12 +84,15 @@ export function Select({
         </RadixSelect.Portal>
       </RadixSelect.Root>
       {hint && (
-        <p id={hintId} className="text-sm text-muted">
+        <p id={hintId} className="text-secondary text-muted">
           {hint}
         </p>
       )}
       {error && (
-        <p id={errorId} className="text-sm font-medium text-danger">
+        <p
+          id={errorId}
+          className="text-secondary font-medium text-status-failed"
+        >
           {error}
         </p>
       )}

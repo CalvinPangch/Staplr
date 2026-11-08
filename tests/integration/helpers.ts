@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseConfig } from '../../src/server/config';
-import { migrateUp } from '../../src/server/db/migrate';
+import { migrateDown, migrateUp } from '../../src/server/db/migrate';
 import { buildApp } from '../../src/server/app';
 import { createScheduler } from '../../src/server/modules/health/scheduler';
 import { startPlatformFake } from '../fakes/platform-fake';
@@ -28,10 +28,17 @@ export async function fixture(
     driver?: SandboxDriver | null;
     startup?: StartupRegistry;
     freeBytes?: () => Promise<number>;
+    /** Seeds data as an older release (migration 0009) left it, then upgrades. */
+    beforeUpgrade?: (db: Database.Database) => void;
   } = {},
 ) {
   const db = new Database(':memory:');
   migrateUp(db);
+  if (options.beforeUpgrade) {
+    migrateDown(db, 9);
+    options.beforeUpgrade(db);
+    migrateUp(db);
+  }
   let time = Date.parse('2026-11-08T00:00:00Z');
   const config = parseConfig({
     STAPLR_MASTER_KEY: Buffer.alloc(32, 1).toString('base64'),
@@ -85,6 +92,7 @@ export async function platformFixture(
     driver?: SandboxDriver;
     startup?: StartupRegistry;
     freeBytes?: () => Promise<number>;
+    beforeUpgrade?: (db: Database.Database) => void;
   } = {},
 ) {
   const dataDir = await mkdtemp(join(tmpdir(), 'staplr-data-'));
@@ -104,6 +112,7 @@ export async function platformFixture(
     driver: options.driver ?? null,
     ...(options.startup ? { startup: options.startup } : {}),
     ...(options.freeBytes ? { freeBytes: options.freeBytes } : {}),
+    ...(options.beforeUpgrade ? { beforeUpgrade: options.beforeUpgrade } : {}),
   });
   const cookie = await signedIn(f);
   const call = (

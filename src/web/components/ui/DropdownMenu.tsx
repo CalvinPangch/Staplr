@@ -27,7 +27,7 @@ export function DropdownMenu({
       <RadixMenu.Trigger
         aria-label={label}
         className={cn(
-          'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-edge bg-bg px-3 text-fg hover:bg-surface',
+          'inline-flex min-h-11 min-w-11 items-center justify-center rounded-control border border-control bg-bg px-3 text-fg hover:bg-surface',
           className,
         )}
       >
@@ -37,14 +37,14 @@ export function DropdownMenu({
         <RadixMenu.Content
           align="end"
           sideOffset={4}
-          className="z-50 min-w-44 rounded-lg border border-edge bg-bg p-1 text-fg shadow-lg"
+          className="z-50 min-w-44 rounded-card border border-separator bg-surface-raised p-1 text-fg shadow-card"
         >
           {items.map((item) => (
             <RadixMenu.Item
               key={item.label}
               disabled={item.disabled ?? false}
               onSelect={item.onSelect}
-              className="flex min-h-11 cursor-pointer items-center rounded px-3 py-2 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-60 data-[highlighted]:bg-surface-strong"
+              className="flex min-h-11 cursor-pointer items-center rounded-control px-3 py-2 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-60 data-[highlighted]:bg-accent-soft"
             >
               {item.label}
             </RadixMenu.Item>

@@ -108,14 +108,14 @@ export function CodexModels({
         <p
           className={
             status === 'failed'
-              ? 'rounded-lg border border-warning bg-warning-soft p-3 text-sm text-warning'
-              : 'text-sm'
+              ? 'rounded-card border border-status-attention bg-status-attention-soft p-4 text-secondary text-status-attention'
+              : 'text-secondary'
           }
         >
           {text}
         </p>
       )}
-      <p className="text-sm text-muted">
+      <p className="text-secondary text-muted">
         Models last refreshed:{' '}
         {connection.modelsRefreshedAt ? (
           <time dateTime={connection.modelsRefreshedAt}>
@@ -128,7 +128,7 @@ export function CodexModels({
       {error && (
         <p
           role="alert"
-          className="rounded-lg border border-danger bg-danger-soft p-3 text-sm text-danger"
+          className="rounded-card border border-status-failed bg-status-failed-soft p-4 text-secondary text-status-failed"
         >
           {error}
         </p>
@@ -166,12 +166,12 @@ export function CodexModels({
           >
             <ul
               aria-label={`Models for ${connection.name}`}
-              className="m-0 flex list-none flex-col gap-1 p-0 text-sm"
+              className="m-0 flex list-none flex-col gap-1 p-0 text-secondary"
             >
               {list.map((model) => (
                 <li
                   key={model.id}
-                  className="flex flex-wrap justify-between gap-x-4 rounded border border-edge-soft px-3 py-2"
+                  className="flex flex-wrap justify-between gap-x-4 rounded border border-separator px-3 py-2"
                 >
                   <span className="font-medium">{model.label}</span>
                   <span

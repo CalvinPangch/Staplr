@@ -6,6 +6,7 @@ import {
   terminalFor,
   type FakeSandboxDriver,
 } from '../fakes/fake-sandbox-driver';
+import { agentBody } from './agent-helpers';
 
 let driver: FakeSandboxDriver;
 let f: Awaited<ReturnType<typeof platformFixture>>;
@@ -110,18 +111,17 @@ describe('after a Codex sign-in', () => {
       discovered: true,
       label: 'Stub gpt-brand-new',
     });
-    const souls = (await f.call('GET', '/api/souls')).json() as {
-      id: string;
-      roleType: string;
-      isDefault: boolean;
-    }[];
-    const agent = await f.call('POST', '/api/agents', {
-      name: 'new model agent',
-      soulId: souls.find((s) => s.isDefault && s.roleType === 'developer')?.id,
-      provider: 'codex',
-      providerConnectionId: id,
-      model: 'gpt-brand-new',
-    });
+    const agent = await f.call(
+      'POST',
+      '/api/agents',
+      await agentBody(f, {
+        name: 'new model agent',
+        role: 'developer',
+        provider: 'codex',
+        providerConnectionId: id,
+        model: 'gpt-brand-new',
+      }),
+    );
     expect(agent.statusCode).toBe(201);
     expect(agent.json().readiness).toBe('ready');
   });
@@ -222,22 +222,18 @@ describe('keeping the remembered list current (US2)', () => {
     );
     expect(done.statusCode).toBe(200);
   };
-  const developerSoul = async () =>
-    (
-      (await f.call('GET', '/api/souls')).json() as {
-        id: string;
-        roleType: string;
-        isDefault: boolean;
-      }[]
-    ).find((s) => s.isDefault && s.roleType === 'developer')?.id;
   const agentOn = async (id: string, model: string, name: string) => {
-    const reply = await f.call('POST', '/api/agents', {
-      name,
-      soulId: await developerSoul(),
-      provider: 'codex',
-      providerConnectionId: id,
-      model,
-    });
+    const reply = await f.call(
+      'POST',
+      '/api/agents',
+      await agentBody(f, {
+        name,
+        role: 'developer',
+        provider: 'codex',
+        providerConnectionId: id,
+        model,
+      }),
+    );
     expect(reply.statusCode).toBe(201);
     return reply.json().id as string;
   };
@@ -328,15 +324,20 @@ describe('keeping the remembered list current (US2)', () => {
     expect((await agent(onAstra)).model).toBe('gpt-6-astra');
     // FR-014: no longer listed for any connection, so not offered and refused
     expect((await availability(id))['gpt-brand-new']).toBeUndefined();
-    const refused = await f.call('POST', '/api/agents', {
-      name: 'too late',
-      soulId: await developerSoul(),
-      provider: 'codex',
-      providerConnectionId: id,
-      model: 'gpt-brand-new',
-    });
+    const refused = await f.call(
+      'POST',
+      '/api/agents',
+      await agentBody(f, {
+        name: 'too late',
+        role: 'developer',
+        provider: 'codex',
+        providerConnectionId: id,
+        model: 'gpt-brand-new',
+      }),
+    );
     expect(refused.statusCode).toBe(422);
-    expect(refused.json().code).toBe('model_unavailable');
+    expect(refused.json().code).toBe('agent_file_invalid');
+    expect(refused.json().details.problems[0].field).toBe('model');
   });
 
   it('the hourly check re-lists for free and probes only the models agents use', async () => {

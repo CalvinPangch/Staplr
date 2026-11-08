@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { Catalog } from '../../src/server/modules/prices/catalog';
 import { platformFixture } from './helpers';
+import { agentBody } from './agent-helpers';
 
 /**
  * A new release of the app can ship a revised catalog. These tests swap the
@@ -54,20 +55,17 @@ describe('what an upgrade does to model access and agents', () => {
         apiKey: key,
       })
     ).json().id as string;
-    const soulId = (
-      (await f.call('GET', '/api/souls')).json() as {
-        id: string;
-        roleType: string;
-        isDefault: boolean;
-      }[]
-    ).find((s) => s.isDefault && s.roleType === 'developer')?.id;
-    const agent = await f.call('POST', '/api/agents', {
-      name: 'dev',
-      soulId,
-      provider: 'claude',
-      providerConnectionId: connection,
-      model: 'claude-sonnet-5-5',
-    });
+    const agent = await f.call(
+      'POST',
+      '/api/agents',
+      await agentBody(f, {
+        name: 'dev',
+        role: 'developer',
+        provider: 'claude',
+        providerConnectionId: connection,
+        model: 'claude-sonnet-5-5',
+      }),
+    );
     expect(agent.statusCode).toBe(201);
     return { connection, agent: agent.json().id as string };
   }

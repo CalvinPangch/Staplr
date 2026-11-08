@@ -88,7 +88,7 @@ export function AddProjectWizard({
       {serverError && (
         <p
           role="alert"
-          className="rounded-lg border border-danger bg-danger-soft p-3 text-danger"
+          className="rounded-card border border-status-failed bg-status-failed-soft p-4 text-status-failed"
         >
           {serverError}
         </p>
@@ -120,7 +120,7 @@ export function AddProjectWizard({
         </>
       ) : (
         <>
-          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-secondary">
             <dt className="text-muted">Repository</dt>
             <dd className="break-all">{picked?.repository.fullName}</dd>
             <dt className="text-muted">Base branch</dt>

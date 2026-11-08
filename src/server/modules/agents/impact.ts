@@ -1,21 +1,21 @@
 import type Database from 'better-sqlite3';
 import type { ImpactRegistry } from '../providers/impact.js';
-import type { SoulService } from '../souls/service.js';
+import type { AgentService } from './service.js';
 
 /**
  * Tells the rest of the app who depends on what: the provider impact list and
- * hourly model checks see the agents on a connection, and a soul cannot be
- * deleted while agents use it. The provider and soul modules never read the
- * agent table themselves.
+ * hourly model checks see the agents on a connection, and a renamed connection
+ * is written into the agent files that use it. The provider module never reads
+ * the agent table itself.
  */
 export function registerAgentImpact({
   db,
   impact,
-  souls,
+  agents,
 }: {
   db: Database.Database;
   impact: ImpactRegistry;
-  souls: SoulService;
+  agents: AgentService;
 }) {
   impact.registerImpactSource((connectionId) => ({
     agents: db
@@ -28,15 +28,12 @@ export function registerAgentImpact({
     (
       db
         .prepare(
-          'SELECT DISTINCT model FROM agent WHERE providerConnectionId=?',
+          'SELECT DISTINCT model FROM agent WHERE providerConnectionId=? AND model IS NOT NULL',
         )
         .all(connectionId) as { model: string }[]
     ).map((row) => row.model),
   );
-  souls.registerUsage(
-    (soulId) =>
-      db
-        .prepare('SELECT id, name FROM agent WHERE soulId=? ORDER BY name')
-        .all(soulId) as { id: string; name: string }[],
+  impact.registerRenameHook((connectionId, newName) =>
+    agents.connectionRenamed(connectionId, newName),
   );
 }

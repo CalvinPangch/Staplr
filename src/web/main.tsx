@@ -2,6 +2,8 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider } from '@tanstack/react-router';
+// Inter (variable weight), served by Staplr itself; browsers fetch only the subsets a page uses.
+import '@fontsource-variable/inter/wght.css';
 import './styles/app.css';
 import { signedOutEvent } from './lib/api';
 import { applyStoredTheme } from './lib/theme';

@@ -73,9 +73,14 @@ export function ConnectionCard({
   }
 
   return (
-    <li className="resource-card flex flex-col gap-3 rounded-lg border border-edge-soft bg-bg p-4">
+    <li
+      data-card=""
+      className="flex flex-col gap-4 rounded-card border border-separator bg-surface p-4 shadow-card md:p-6"
+    >
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="break-all text-lg font-semibold">{connection.name}</h2>
+        <h2 className="break-all text-section font-semibold">
+          {connection.name}
+        </h2>
         <StatusBadge
           status={connection.status}
           reason={
@@ -85,7 +90,7 @@ export function ConnectionCard({
           }
         />
       </div>
-      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-secondary">
         <dt className="text-muted">Platform</dt>
         <dd>{platformName[connection.platform]}</dd>
         {connection.platform === 'gitlab' && (
@@ -114,10 +119,10 @@ export function ConnectionCard({
         </dd>
       </dl>
       {connection.lastCheckResult && (
-        <p className="text-sm">{connection.lastCheckResult}</p>
+        <p className="text-secondary">{connection.lastCheckResult}</p>
       )}
       {connection.missingPermissions.length > 0 && (
-        <div className="text-sm">
+        <div className="text-secondary">
           <p className="font-medium">This token is missing:</p>
           <ul className="list-disc pl-6">
             {connection.missingPermissions.map((id) => (
@@ -129,7 +134,7 @@ export function ConnectionCard({
       {error && (
         <p
           role="alert"
-          className="rounded-lg border border-danger bg-danger-soft p-3 text-sm text-danger"
+          className="rounded-card border border-status-failed bg-status-failed-soft p-4 text-secondary text-status-failed"
         >
           {error}
         </p>
@@ -139,7 +144,7 @@ export function ConnectionCard({
           Check now
         </Button>
         <Button onClick={() => setReplacing(true)}>Replace token</Button>
-        <Button variant="danger" onClick={() => setDeleting(true)}>
+        <Button variant="destructive" onClick={() => setDeleting(true)}>
           Delete
         </Button>
       </div>

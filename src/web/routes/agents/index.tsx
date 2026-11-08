@@ -8,9 +8,11 @@ import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { DataState } from '../../components/ui/DataState';
 import { useAnnounce } from '../../components/ui/LiveRegion';
 import { StatusBadge } from '../../components/ui/StatusBadge';
+import { Card, CardRow } from '../../components/ui/Card';
+import { PageBody, PageHeader } from '../../components/ui/PageHeader';
 import { agentsKey, useAgents } from '../../features/agents/api';
 import { providerName } from '../../features/providers/api';
-import { roleLabels } from '../../features/souls/api';
+import { roleLabels } from '../../features/agents/api';
 
 function AgentCard({
   agent,
@@ -20,45 +22,38 @@ function AgentCard({
   onDelete: () => void;
 }) {
   return (
-    <li className="resource-card flex flex-col gap-3 rounded-lg border border-edge-soft bg-bg p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="break-all text-lg font-semibold">{agent.name}</h2>
-        <StatusBadge status={agent.readiness} />
-      </div>
-      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
-        <dt className="text-muted">Role</dt>
-        <dd>{roleLabels[agent.role]}</dd>
-        <dt className="text-muted">Provider</dt>
-        <dd>{providerName[agent.provider]}</dd>
-        <dt className="text-muted">Model</dt>
-        <dd className="break-all">{agent.model}</dd>
-        <dt className="text-muted">Projects</dt>
-        <dd>
-          {agent.projects.length > 0
-            ? agent.projects.map((p) => p.name).join(', ')
-            : 'None yet'}
-        </dd>
-      </dl>
-      {agent.reasons.length > 0 && (
-        <ul className="m-0 list-disc pl-6 text-sm">
-          {agent.reasons.map((reason) => (
-            <li key={reason.code}>{reason.message}</li>
-          ))}
-        </ul>
-      )}
-      <div className="flex flex-wrap gap-2">
-        <Link
-          to="/agents/$agentId"
-          params={{ agentId: agent.id }}
-          className="inline-flex min-h-11 items-center rounded-lg border border-edge bg-bg px-4 py-2 hover:bg-surface"
-        >
-          Edit<span className="sr-only"> {agent.name}</span>
-        </Link>
-        <Button variant="danger" onClick={onDelete}>
-          Delete<span className="sr-only"> {agent.name}</span>
-        </Button>
-      </div>
-    </li>
+    <Card as="li">
+      <CardRow
+        title={agent.name}
+        href={`/agents/${agent.id}`}
+        details={
+          <>
+            {roleLabels[agent.role]} · {providerName[agent.provider]} ·{' '}
+            <span className="break-all">{agent.model ?? 'No model yet'}</span>
+            <br />
+            {agent.projects.length > 0
+              ? `On ${agent.projects.map((p) => p.name).join(', ')}`
+              : 'Not on a project yet'}
+          </>
+        }
+        status={<StatusBadge status={agent.readiness} />}
+        reason={agent.reasons.map((reason) => reason.message).join(' ')}
+        actions={
+          <>
+            <Link
+              to="/agents/$agentId"
+              params={{ agentId: agent.id }}
+              className="inline-flex min-h-11 items-center rounded-control border border-control bg-surface px-4 font-semibold text-fg hover:bg-bg"
+            >
+              Edit<span className="sr-only"> {agent.name}</span>
+            </Link>
+            <Button variant="destructive" onClick={onDelete}>
+              Delete<span className="sr-only"> {agent.name}</span>
+            </Button>
+          </>
+        }
+      />
+    </Card>
   );
 }
 
@@ -99,74 +94,84 @@ export function AgentsPage() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1>Agents</h1>
-        <Link
-          to="/agents/$agentId"
-          params={{ agentId: 'new' }}
-          className="inline-flex min-h-11 items-center rounded-lg bg-primary px-4 py-2 text-primary-fg hover:opacity-90"
-        >
-          New agent
-        </Link>
-      </div>
-      <p className="text-muted">
-        An agent is a soul (its role) running on a provider connection with a
-        model you choose. Only models verified for that exact connection can be
-        picked.
-      </p>
-      {error && (
-        <div
-          role="alert"
-          className="rounded-lg border border-danger bg-danger-soft p-3 text-danger"
-        >
-          <p>{error}</p>
-          {blockedBy.length > 0 && (
-            <ul className="list-disc pl-6">
-              {blockedBy.map((project) => (
-                <li key={project.id}>{project.name}</li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
-      <DataState
-        what="agents"
-        isLoading={query.isPending}
-        error={query.error}
-        isEmpty={agents.length === 0}
-        empty={
-          <p>
-            No agents yet. Connect a provider, then create an agent to give a
-            soul a model to run on.
-          </p>
+    <>
+      <PageHeader
+        title="Agents"
+        description="Each agent is one Markdown file: its role, model and working instructions."
+        action={
+          <Link
+            to="/agents/$agentId"
+            params={{ agentId: 'new' }}
+            data-variant="primary"
+            className="inline-flex min-h-11 items-center rounded-control bg-accent px-4 font-semibold text-accent-fg hover:opacity-90"
+          >
+            New agent
+          </Link>
         }
-        onRetry={() => void query.refetch()}
-      >
-        <ul className="resource-grid m-0 list-none p-0">
-          {agents.map((agent) => (
-            <AgentCard
-              key={agent.id}
-              agent={agent}
-              onDelete={() => {
-                setError(null);
-                setBlockedBy([]);
-                setDeleting(agent);
-              }}
-            />
-          ))}
-        </ul>
-      </DataState>
+      />
+      <PageBody>
+        {error && (
+          <div
+            role="alert"
+            className="rounded-card border border-status-failed bg-status-failed-soft p-4 text-status-failed"
+          >
+            <p>{error}</p>
+            {blockedBy.length > 0 && (
+              <ul className="list-disc pl-6">
+                {blockedBy.map((project) => (
+                  <li key={project.id}>{project.name}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+        <DataState
+          what="agents"
+          isLoading={query.isPending}
+          error={query.error}
+          isEmpty={agents.length === 0}
+          empty={
+            <>
+              <p>
+                No agents yet. Connect a provider, then create an agent from one
+                of the role templates.
+              </p>
+              <Link
+                to="/agents/$agentId"
+                params={{ agentId: 'new' }}
+                className="inline-flex min-h-11 items-center rounded-control bg-accent px-4 font-semibold text-accent-fg hover:opacity-90"
+              >
+                Create your first agent
+              </Link>
+            </>
+          }
+          onRetry={() => void query.refetch()}
+        >
+          <ul className="m-0 grid list-none gap-4 p-0 lg:grid-cols-2">
+            {agents.map((agent) => (
+              <AgentCard
+                key={agent.id}
+                agent={agent}
+                onDelete={() => {
+                  setError(null);
+                  setBlockedBy([]);
+                  setDeleting(agent);
+                }}
+              />
+            ))}
+          </ul>
+        </DataState>
+      </PageBody>
       <ConfirmDialog
         open={deleting !== null}
         onOpenChange={(open) => !open && setDeleting(null)}
         title={`Delete ${deleting?.name ?? 'this agent'}?`}
-        description="The agent is removed. Its souls and provider connection are not affected."
+        description="The agent and its file are removed. Its provider connection is not affected."
         confirmLabel="Delete agent"
         destructive
         busy={removing}
         onConfirm={() => void remove()}
       />
-    </div>
+    </>
   );
 }

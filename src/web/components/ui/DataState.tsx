@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { CircleX, Inbox, LoaderCircle } from 'lucide-react';
 import { errorMessage } from '../../lib/api';
 import { Button } from './Button';
 
@@ -17,7 +18,8 @@ export interface DataStateProps {
 
 /**
  * Every screen renders its data through this component, so loading, empty,
- * error and success states are always explicit (Constitution III).
+ * error and success states are always explicit and look the same everywhere
+ * (Constitution III; feature 004, FR-009).
  */
 export function DataState({
   isLoading,
@@ -30,18 +32,30 @@ export function DataState({
 }: DataStateProps) {
   if (isLoading)
     return (
-      <p role="status" className="text-muted">
-        Loading {what}…
-      </p>
+      <div
+        role="status"
+        data-state="loading"
+        className="flex min-h-32 items-center justify-center gap-2 rounded-card bg-surface p-6 text-muted"
+      >
+        <LoaderCircle
+          aria-hidden="true"
+          className="size-5 animate-spin motion-reduce:animate-none"
+        />
+        <span>Loading {what}…</span>
+      </div>
     );
   if (error)
     return (
       <div
         role="alert"
-        className="flex flex-col items-start gap-3 rounded-lg border border-danger bg-danger-soft p-4 text-danger"
+        data-state="error"
+        className="flex flex-col items-start gap-3 rounded-card border border-status-failed bg-status-failed-soft p-4 text-status-failed"
       >
-        <p className="font-medium">
-          Could not load {what}. {errorMessage(error)}
+        <p className="flex items-center gap-2 font-medium">
+          <CircleX aria-hidden="true" className="size-5 shrink-0" />
+          <span>
+            Could not load {what}. {errorMessage(error)}
+          </span>
         </p>
         {onRetry && (
           <Button variant="secondary" onClick={onRetry}>
@@ -52,8 +66,14 @@ export function DataState({
     );
   if (isEmpty)
     return (
-      <div className="empty-state rounded-lg border border-edge-soft bg-bg p-4">
-        {empty ?? <p>No {what} yet.</p>}
+      <div
+        data-state="empty"
+        className="flex flex-col items-center gap-3 rounded-card bg-surface p-8 text-center shadow-card"
+      >
+        <Inbox aria-hidden="true" className="size-8 text-muted" />
+        <div className="flex flex-col items-center gap-3 text-fg">
+          {empty ?? <p>No {what} yet.</p>}
+        </div>
       </div>
     );
   return <>{children}</>;

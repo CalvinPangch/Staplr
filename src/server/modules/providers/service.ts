@@ -642,9 +642,13 @@ export function createProviderService({
       const row = requireRow(id);
       assertNameFree(row.provider, name, id);
       try {
-        db.prepare(
-          'UPDATE provider_connection SET name=?, updatedAt=? WHERE id=?',
-        ).run(name, now(), id);
+        db.transaction(() => {
+          db.prepare(
+            'UPDATE provider_connection SET name=?, updatedAt=? WHERE id=?',
+          ).run(name, now(), id);
+          // agent files name the connection; they follow the rename (feature 003)
+          impact.connectionRenamed(id, name);
+        })();
       } catch (error) {
         if (uniqueViolation(error))
           throw new ServiceError(

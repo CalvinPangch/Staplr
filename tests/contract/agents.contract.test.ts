@@ -1,11 +1,14 @@
 import { it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { platformFixture } from '../integration/helpers';
+import { agentBody } from '../integration/agent-helpers';
+import { setHeaderValue } from '../../src/shared/agent-file';
 import { validateResponse } from './harness';
 
 const problem = 'application/problem+json';
 const models = ['claude-sonnet-5-5', 'claude-haiku-5-5'];
 
-it('every agent and model response matches the contract', async () => {
+it('every agent, template and model response matches the contract', async () => {
   const f = await platformFixture();
   try {
     f.anthropic.setKey('sk-ant-contract-agent', { models });
@@ -17,13 +20,6 @@ it('every agent and model response matches the contract', async () => {
         apiKey: 'sk-ant-contract-agent',
       })
     ).json().id as string;
-    const soulId = (
-      (await f.call('GET', '/api/souls')).json() as {
-        id: string;
-        roleType: string;
-        isDefault: boolean;
-      }[]
-    ).find((s) => s.isDefault && s.roleType === 'developer')?.id as string;
 
     const catalog = await f.call(
       'GET',
@@ -47,13 +43,17 @@ it('every agent and model response matches the contract', async () => {
     expect(noParam.statusCode).toBe(422);
     validateResponse('/api/models', 'get', 422, noParam.json(), problem);
 
-    const input = {
+    const templates = await f.call('GET', '/api/agent-templates');
+    expect(templates.statusCode).toBe(200);
+    validateResponse('/api/agent-templates', 'get', 200, templates.json());
+
+    const input = await agentBody(f, {
       name: 'Contract agent',
-      soulId,
+      role: 'developer',
       provider: 'claude',
       providerConnectionId: connection,
       model: 'claude-sonnet-5-5',
-    };
+    });
     const created = await f.call('POST', '/api/agents', input);
     expect(created.statusCode).toBe(201);
     validateResponse('/api/agents', 'post', 201, created.json());
@@ -63,27 +63,44 @@ it('every agent and model response matches the contract', async () => {
     validateResponse('/api/agents', 'get', 200, list.json());
     const got = await f.call('GET', `/api/agents/${id}`);
     validateResponse('/api/agents/{id}', 'get', 200, got.json());
-    const updated = await f.call('PUT', `/api/agents/${id}`, {
-      ...input,
-      model: 'claude-haiku-5-5',
+    const change = (model: string, revision: number) => ({
+      definition: setHeaderValue(input.definition, 'model', model),
+      revision,
     });
+    const updated = await f.call(
+      'PUT',
+      `/api/agents/${id}`,
+      change('claude-haiku-5-5', 1),
+    );
     expect(updated.statusCode).toBe(200);
     validateResponse('/api/agents/{id}', 'put', 200, updated.json());
+    const stale = await f.call(
+      'PUT',
+      `/api/agents/${id}`,
+      change('claude-sonnet-5-5', 1),
+    );
+    expect(stale.statusCode).toBe(409);
+    validateResponse('/api/agents/{id}', 'put', 409, stale.json(), problem);
 
     const duplicate = await f.call('POST', '/api/agents', input);
-    expect(duplicate.statusCode).toBe(409);
-    validateResponse('/api/agents', 'post', 409, duplicate.json(), problem);
+    expect(duplicate.statusCode).toBe(422);
+    validateResponse('/api/agents', 'post', 422, duplicate.json(), problem);
     const unavailable = await f.call('POST', '/api/agents', {
-      ...input,
-      name: 'other',
-      model: 'claude-made-up',
+      definition: setHeaderValue(
+        setHeaderValue(input.definition, 'name', 'other'),
+        'model',
+        'claude-made-up',
+      ),
     });
     expect(unavailable.statusCode).toBe(422);
     validateResponse('/api/agents', 'post', 422, unavailable.json(), problem);
     const missing = await f.call('GET', '/api/agents/nope');
     expect(missing.statusCode).toBe(404);
     validateResponse('/api/agents/{id}', 'get', 404, missing.json(), problem);
-    const putMissing = await f.call('PUT', '/api/agents/nope', input);
+    const putMissing = await f.call('PUT', '/api/agents/nope', {
+      ...input,
+      revision: 1,
+    });
     expect(putMissing.statusCode).toBe(404);
     validateResponse(
       '/api/agents/{id}',
@@ -92,10 +109,11 @@ it('every agent and model response matches the contract', async () => {
       putMissing.json(),
       problem,
     );
-    const putInvalid = await f.call('PUT', `/api/agents/${id}`, {
-      ...input,
-      model: 'claude-made-up',
-    });
+    const putInvalid = await f.call(
+      'PUT',
+      `/api/agents/${id}`,
+      change('claude-made-up', 2),
+    );
     expect(putInvalid.statusCode).toBe(422);
     validateResponse(
       '/api/agents/{id}',
@@ -120,4 +138,13 @@ it('every agent and model response matches the contract', async () => {
   } finally {
     await f.close();
   }
+});
+
+it('the contract has no soul endpoints any more', () => {
+  const spec = readFileSync(
+    'specs/001-agent-team-orchestration/contracts/openapi.yaml',
+    'utf8',
+  );
+  expect(spec).not.toMatch(/\/api\/souls/);
+  expect(spec).not.toMatch(/^ {4}Soul(Input)?:/m);
 });

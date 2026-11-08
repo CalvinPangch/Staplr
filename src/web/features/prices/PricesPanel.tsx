@@ -72,12 +72,13 @@ export function PricesPanel() {
   return (
     <section
       aria-labelledby="prices-heading"
-      className="flex flex-col gap-2 rounded-lg border border-edge-soft bg-surface p-4"
+      data-card=""
+      className="flex flex-col gap-3 rounded-card border border-separator bg-surface p-4 shadow-card md:p-6"
     >
-      <h2 id="prices-heading" className="text-lg font-semibold">
+      <h2 id="prices-heading" className="text-section font-semibold">
         Model prices
       </h2>
-      <p className="text-sm text-muted">
+      <p className="text-secondary text-muted">
         List prices come from the official Anthropic and OpenAI pricing pages
         and are shown beside each model. They are read once a day.
       </p>
@@ -87,7 +88,7 @@ export function PricesPanel() {
         error={status.error}
         onRetry={() => void status.refetch()}
       >
-        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-secondary">
           {(status.data?.providers ?? []).map((p) => (
             <div key={p.provider} className="contents">
               <dt className="text-muted">
@@ -110,7 +111,7 @@ export function PricesPanel() {
           .map((p) => (
             <p
               key={p.provider}
-              className="rounded-lg border border-warning bg-warning-soft p-3 text-sm text-warning"
+              className="rounded-card border border-status-attention bg-status-attention-soft p-4 text-secondary text-status-attention"
             >
               {names[p.provider]}: {p.lastError}
             </p>
@@ -119,7 +120,7 @@ export function PricesPanel() {
       {error && (
         <p
           role="alert"
-          className="rounded-lg border border-danger bg-danger-soft p-3 text-sm text-danger"
+          className="rounded-card border border-status-failed bg-status-failed-soft p-4 text-secondary text-status-failed"
         >
           {error}
         </p>

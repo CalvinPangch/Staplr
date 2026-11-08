@@ -6,8 +6,8 @@ import { join } from 'node:path';
 const jobs = [
   ['src/server/db/migrations', 'dist/server/db/migrations', /\.sql$/],
   [
-    'src/server/modules/souls/defaults',
-    'dist/server/modules/souls/defaults',
+    'src/server/modules/agents/templates',
+    'dist/server/modules/agents/templates',
     /\.md$/,
   ],
 ];

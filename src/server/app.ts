@@ -44,8 +44,6 @@ import { createAgentService } from './modules/agents/service.js';
 import { priceRoutes } from './modules/prices/routes.js';
 import { createPriceService } from './modules/prices/service.js';
 import { loadCatalog } from './modules/prices/catalog.js';
-import { soulRoutes } from './modules/souls/routes.js';
-import { createSoulService } from './modules/souls/service.js';
 import { sourceControlRoutes } from './modules/source-control/routes.js';
 import { createSourceControlService } from './modules/source-control/service.js';
 
@@ -221,12 +219,9 @@ export function buildApp({
     startup.registerStartupTask('recover-sandbox-sessions', () =>
       sandbox.recover(),
     );
-  const souls = createSoulService({ db, clock });
-  app.decorate('souls', souls);
-  soulRoutes(app, souls);
   const agents = createAgentService({ db, clock, providers });
   app.decorate('agents', agents);
-  registerAgentImpact({ db, impact: impactRegistry, souls });
+  registerAgentImpact({ db, impact: impactRegistry, agents });
   agentRoutes(app, agents);
   // The catalog shipped with this release is merged before anything reads prices or models.
   // The shipped catalog is validated before anything reads models; prices come
@@ -291,10 +286,4 @@ export function buildApp({
       .send(problem('not_found', 'That address does not exist.'));
   });
   return app;
-}
-
-declare module 'fastify' {
-  interface FastifyInstance {
-    souls: ReturnType<typeof createSoulService>;
-  }
 }

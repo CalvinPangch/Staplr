@@ -16,4 +16,5 @@ jobs:
       - run: npm test
       - run: npm audit --audit-level=high
       - run: npx playwright install --with-deps chromium
+      - run: npm run sandbox:build -- stub
       - run: npm run test:e2e

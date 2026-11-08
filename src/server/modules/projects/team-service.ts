@@ -80,7 +80,7 @@ export function createTeamService({
         throw new ServiceError(
           422,
           'invalid_input',
-          `${agent.name} is not a Project Manager. Choose an agent whose soul has the Project Manager role.`,
+          `${agent.name} is not a Project Manager. Choose an agent whose role is Project Manager.`,
         );
       db.transaction(() => {
         for (const member of current.members)

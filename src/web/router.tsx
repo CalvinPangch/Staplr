@@ -17,8 +17,6 @@ import { AgentsPage } from './routes/agents';
 import { DiagnosticsPage } from './routes/diagnostics';
 import { ProjectDetailPage } from './routes/projects/$projectId';
 import { ProjectsPage } from './routes/projects';
-import { SoulEditorPage } from './routes/souls/$soulId';
-import { SoulsPage } from './routes/souls';
 import { SourceControlPage } from './routes/settings/source-control';
 import { SetupPage } from './routes/setup';
 import { SignInPage } from './routes/sign-in';
@@ -114,16 +112,6 @@ export function createAppRouter(queryClient: QueryClient) {
       getParentRoute: () => rootRoute,
       path: '/settings/providers/login/$sessionId',
       component: ProviderLoginPage,
-    }),
-    createRoute({
-      getParentRoute: () => rootRoute,
-      path: '/souls',
-      component: SoulsPage,
-    }),
-    createRoute({
-      getParentRoute: () => rootRoute,
-      path: '/souls/$soulId',
-      component: SoulEditorPage,
     }),
     createRoute({
       getParentRoute: () => rootRoute,

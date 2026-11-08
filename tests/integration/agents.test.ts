@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { platformFixture } from './helpers';
+import { agentBody, agentChange, type AgentSpec } from './agent-helpers';
 import {
   createFakeSandboxDriver,
   terminalFor,
@@ -26,7 +27,6 @@ afterEach(async () => {
 interface Agent {
   id: string;
   name: string;
-  soulId: string;
   role: string;
   provider: string;
   providerConnectionId: string | null;
@@ -62,30 +62,28 @@ const codex = async (name: string, line = 'OK') => {
   return done.json().resultConnectionId as string;
 };
 
-const soulOf = async (roleType: string) =>
-  (
-    (await f.call('GET', '/api/souls')).json() as {
-      id: string;
-      roleType: string;
-      isDefault: boolean;
-    }[]
-  ).find((s) => s.isDefault && s.roleType === roleType)?.id as string;
-
-const body = async (connectionId: string, extra: object = {}) => ({
-  name: 'Dev agent',
-  soulId: await soulOf('developer'),
-  provider: 'claude',
-  providerConnectionId: connectionId,
-  model: 'claude-sonnet-5-5',
-  ...extra,
-});
-const create = async (connectionId: string, extra: object = {}) =>
+/** Feature 003: an agent is created from its Markdown file. */
+const body = async (connectionId: string, extra: Partial<AgentSpec> = {}) =>
+  agentBody(f, {
+    name: 'Dev agent',
+    role: 'developer',
+    provider: 'claude',
+    providerConnectionId: connectionId,
+    model: 'claude-sonnet-5-5',
+    ...extra,
+  });
+const create = async (connectionId: string, extra: Partial<AgentSpec> = {}) =>
   f.call('POST', '/api/agents', await body(connectionId, extra));
+/** The fields named in a refused file, for example ["model"]. */
+const fieldsOf = (reply: { json(): unknown }) =>
+  (
+    reply.json() as { details: { problems: { field: string }[] } }
+  ).details.problems.map((p) => p.field);
 const agents = async () =>
   (await f.call('GET', '/api/agents')).json() as Agent[];
 
 describe('creating agents', () => {
-  it('creates a ready agent whose role comes from its soul', async () => {
+  it('creates a ready agent whose role comes from its file', async () => {
     const connection = await claude('work', 'sk-ant-agent-1');
     const reply = await create(connection);
     expect(reply.statusCode).toBe(201);
@@ -110,8 +108,9 @@ describe('creating agents', () => {
     const connection = await claude('work', 'sk-ant-agent-1');
     expect((await create(connection)).statusCode).toBe(201);
     const clash = await create(connection, { name: 'DEV AGENT' });
-    expect(clash.statusCode).toBe(409);
-    expect(clash.json().code).toBe('conflict');
+    expect(clash.statusCode).toBe(422);
+    expect(clash.json().code).toBe('agent_file_invalid');
+    expect(fieldsOf(clash)).toEqual(['name']);
     expect((await create(connection, { name: '' })).statusCode).toBe(422);
     expect(
       (await create(connection, { name: 'n'.repeat(81) })).statusCode,
@@ -119,30 +118,30 @@ describe('creating agents', () => {
     expect(
       (await create(connection, { name: 'n'.repeat(80) })).statusCode,
     ).toBe(201);
-    expect((await create(connection, { surprise: 1 })).statusCode).toBe(422);
+    const extra = { ...(await body(connection)), surprise: 1 };
+    expect((await f.call('POST', '/api/agents', extra)).statusCode).toBe(422);
   });
 
   it('requires the provider to match the connection', async () => {
     const connection = await claude('work', 'sk-ant-agent-1');
+    // a Claude connection named under provider: codex is not a Codex connection
     const reply = await create(connection, { provider: 'codex' });
     expect(reply.statusCode).toBe(422);
-    expect(reply.json().code).toBe('invalid_input');
-    expect(reply.json().message).toMatch(/provider/i);
+    expect(reply.json().code).toBe('agent_file_invalid');
+    expect(fieldsOf(reply)).toContain('connection');
   });
 
-  it('refuses an unknown connection or soul', async () => {
-    const connection = await claude('work', 'sk-ant-agent-1');
-    expect((await create('missing')).statusCode).toBe(422);
-    expect((await create(connection, { soulId: 'missing' })).statusCode).toBe(
-      422,
-    );
+  it('refuses an unknown connection', async () => {
+    const reply = await create('missing');
+    expect(reply.statusCode).toBe(422);
+    expect(fieldsOf(reply)).toEqual(['connection']);
   });
 
   it('refuses a model outside the catalog and never substitutes another', async () => {
     const connection = await claude('work', 'sk-ant-agent-1');
     const reply = await create(connection, { model: 'claude-made-up' });
     expect(reply.statusCode).toBe(422);
-    expect(reply.json().code).toBe('model_unavailable');
+    expect(fieldsOf(reply)).toEqual(['model']);
     expect(await agents()).toEqual([]);
   });
 
@@ -153,7 +152,7 @@ describe('creating agents', () => {
     ]);
     const denied = await create(small, { name: 'on small' });
     expect(denied.statusCode).toBe(422);
-    expect(denied.json().code).toBe('model_unavailable');
+    expect(fieldsOf(denied)).toEqual(['model']);
     expect((await create(full, { name: 'on full' })).statusCode).toBe(201);
     expect(
       (await create(small, { name: 'haiku', model: 'claude-haiku-5-5' }))
@@ -170,11 +169,11 @@ describe('creating agents', () => {
       name: 'codex agent',
       provider: 'codex',
       model: 'gpt-6-astra',
-    };
+    } as const;
     const before = await create(connection, input);
     expect(before.statusCode).toBe(422);
-    expect(before.json().code).toBe('model_unavailable');
-    expect(before.json().message).toMatch(/Check availability/);
+    expect(fieldsOf(before)).toEqual(['model']);
+    expect(JSON.stringify(before.json())).toMatch(/Check availability/);
     driver.probeGate = null;
     release();
     await f.app.providers.whenDiscoveryIdle();
@@ -200,7 +199,7 @@ describe('creating agents', () => {
       model: 'gpt-6-astra',
     });
     expect(reply.statusCode).toBe(422);
-    expect(reply.json().code).toBe('model_unavailable');
+    expect(fieldsOf(reply)).toEqual(['model']);
   });
 });
 
@@ -321,9 +320,11 @@ describe('readiness follows the connection', () => {
     const agent = (await create(connection)).json() as Agent;
     await f.call('DELETE', `/api/provider-connections/${connection}`);
     const other = await claude('other', 'sk-ant-agent-2');
-    const fixed = await f.call('PUT', `/api/agents/${agent.id}`, {
-      ...(await body(other)),
-    });
+    const fixed = await f.call(
+      'PUT',
+      `/api/agents/${agent.id}`,
+      await agentChange(f, agent.id, { connection: 'other' }),
+    );
     expect(fixed.statusCode).toBe(200);
     expect(fixed.json()).toMatchObject({
       providerConnectionId: other,
@@ -350,14 +351,18 @@ describe('editing and deleting agents', () => {
   it('edits an agent and keeps it unchanged when the new model is refused', async () => {
     const connection = await claude('work', 'sk-ant-agent-1');
     const agent = (await create(connection)).json() as Agent;
-    const changed = await f.call('PUT', `/api/agents/${agent.id}`, {
-      ...(await body(connection, { model: 'claude-opus-5-5' })),
-    });
+    const changed = await f.call(
+      'PUT',
+      `/api/agents/${agent.id}`,
+      await agentChange(f, agent.id, { model: 'claude-opus-5-5' }),
+    );
     expect(changed.statusCode).toBe(200);
     expect(changed.json().model).toBe('claude-opus-5-5');
-    const refused = await f.call('PUT', `/api/agents/${agent.id}`, {
-      ...(await body(connection, { model: 'claude-made-up' })),
-    });
+    const refused = await f.call(
+      'PUT',
+      `/api/agents/${agent.id}`,
+      await agentChange(f, agent.id, { model: 'claude-made-up' }),
+    );
     expect(refused.statusCode).toBe(422);
     expect(
       ((await f.call('GET', `/api/agents/${agent.id}`)).json() as Agent).model,
@@ -371,9 +376,11 @@ describe('editing and deleting agents', () => {
   it('lets the same name stay on the same agent', async () => {
     const connection = await claude('work', 'sk-ant-agent-1');
     const agent = (await create(connection)).json() as Agent;
-    const same = await f.call('PUT', `/api/agents/${agent.id}`, {
-      ...(await body(connection)),
-    });
+    const same = await f.call(
+      'PUT',
+      `/api/agents/${agent.id}`,
+      await agentChange(f, agent.id, {}),
+    );
     expect(same.statusCode).toBe(200);
   });
 
@@ -395,31 +402,6 @@ describe('editing and deleting agents', () => {
   it('answers 404 for unknown agents', async () => {
     expect((await f.call('GET', '/api/agents/nope')).statusCode).toBe(404);
     expect((await f.call('DELETE', '/api/agents/nope')).statusCode).toBe(404);
-  });
-});
-
-describe('souls in use', () => {
-  it('blocks deleting a soul agents use and names them', async () => {
-    const connection = await claude('work', 'sk-ant-agent-1');
-    const soul = (
-      await f.call('POST', '/api/souls', {
-        name: 'Special dev',
-        roleType: 'developer',
-        description: '',
-        instructions: 'x',
-      })
-    ).json().id as string;
-    const agent = (await create(connection, { soulId: soul })).json() as Agent;
-    const blocked = await f.call('DELETE', `/api/souls/${soul}`);
-    expect(blocked.statusCode).toBe(409);
-    expect(blocked.json().code).toBe('soul_in_use');
-    expect(blocked.json().details.agents).toEqual([
-      { id: agent.id, name: 'Dev agent' },
-    ]);
-    const listed = (await f.call('GET', `/api/souls/${soul}`)).json();
-    expect(listed.usedByAgents).toEqual([{ id: agent.id, name: 'Dev agent' }]);
-    await f.call('DELETE', `/api/agents/${agent.id}`);
-    expect((await f.call('DELETE', `/api/souls/${soul}`)).statusCode).toBe(204);
   });
 });
 
