@@ -9,7 +9,7 @@ import { useProjects } from '../../features/projects/api';
 
 function ProjectCard({ project }: { project: Project }) {
   return (
-    <li className="flex flex-col gap-3 rounded-lg border border-edge-soft bg-surface p-4">
+    <li className="resource-card flex flex-col gap-3 rounded-lg border border-edge-soft bg-bg p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="break-all text-lg font-semibold">{project.name}</h2>
         <StatusBadge status={project.readiness} />
@@ -79,7 +79,7 @@ export function ProjectsPage() {
         }
         onRetry={() => void query.refetch()}
       >
-        <ul className="m-0 flex list-none flex-col gap-4 p-0">
+        <ul className="resource-grid m-0 list-none p-0">
           {projects.map((project) => (
             <ProjectCard key={project.id} project={project} />
           ))}

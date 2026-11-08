@@ -26,7 +26,7 @@ function SoulCard({
   busy: boolean;
 }) {
   return (
-    <li className="flex flex-col gap-2 rounded-lg border border-edge-soft bg-surface p-4">
+    <li className="resource-card flex flex-col gap-2 rounded-lg border border-edge-soft bg-bg p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="break-all text-lg font-semibold">{soul.name}</h3>
         {soul.isDefault && (
@@ -166,7 +166,7 @@ export function SoulsPage() {
               className="flex flex-col gap-3"
             >
               <h2 id={`role-${role}`}>{roleLabels[role]}</h2>
-              <ul className="m-0 flex list-none flex-col gap-3 p-0">
+              <ul className="resource-grid m-0 list-none p-0">
                 {group.map((soul) => (
                   <SoulCard
                     key={soul.id}

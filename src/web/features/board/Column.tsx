@@ -30,7 +30,7 @@ export function Column({
       aria-labelledby={headingId}
       data-testid={`column-${status}`}
       className={cn(
-        'flex min-w-0 flex-col gap-3 rounded-lg border border-edge-soft bg-surface p-3',
+        'board-column flex min-w-0 flex-col gap-3 rounded-lg border border-edge-soft bg-surface p-3',
         isOver && 'ring-2 ring-primary',
       )}
     >

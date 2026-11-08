@@ -189,9 +189,8 @@ export function createGithubAdapter(
         }
 
         // Fine-grained tokens do not list permissions, so probe one repository.
-        // The write probes send NO request body: GitHub rejects them with 422
-        // when the permission exists (nothing is created) and 403 when it
-        // does not.
+        // An empty JSON object is valid JSON but lacks the required fields for
+        // either write operation, so validation rejects it without creating data.
         const repos = await octokit.request('GET /user/repos', {
           per_page: 1,
           sort: 'pushed',
@@ -212,12 +211,14 @@ export function createGithubAdapter(
         );
         const canPush = await allowed(
           () =>
-            octokit.request(`PUT ${base}/contents/.staplr-permission-probe`),
+            octokit.request(`PUT ${base}/contents/.staplr-permission-probe`, {
+              data: {},
+            }),
           [422],
           [403, 404],
         );
         const canPull = await allowed(
-          () => octokit.request(`POST ${base}/pulls`),
+          () => octokit.request(`POST ${base}/pulls`, { data: {} }),
           [422],
           [403, 404],
         );

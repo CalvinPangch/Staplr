@@ -14,6 +14,10 @@ const second = 'ghp_e2eSecondTokenValue0003';
 
 async function openSettings(page: import('@playwright/test').Page) {
   await signInAsOwner(page);
+  await page
+    .getByRole('navigation', { name: 'Main' })
+    .getByRole('link', { name: 'Settings' })
+    .click();
   await page.getByRole('link', { name: 'Source control' }).click();
   await expect(page).toHaveURL(/\/settings\/source-control$/);
   await expect(

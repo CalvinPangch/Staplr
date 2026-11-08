@@ -52,7 +52,7 @@ export function DataState({
     );
   if (isEmpty)
     return (
-      <div className="rounded-lg border border-edge-soft bg-surface p-4">
+      <div className="empty-state rounded-lg border border-edge-soft bg-bg p-4">
         {empty ?? <p>No {what} yet.</p>}
       </div>
     );

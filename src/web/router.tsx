@@ -11,6 +11,7 @@ import { AppShell, NotFound, Pending, StartError } from './routes/__root';
 import { AuditPage } from './routes/audit';
 import { HomePage } from './routes/home';
 import { ProvidersPage } from './routes/settings/providers';
+import { SettingsPage } from './routes/settings/index';
 import { AgentEditorPage } from './routes/agents/$agentId';
 import { AgentsPage } from './routes/agents';
 import { DiagnosticsPage } from './routes/diagnostics';
@@ -93,6 +94,11 @@ export function createAppRouter(queryClient: QueryClient) {
       getParentRoute: () => rootRoute,
       path: '/sign-in',
       component: SignInPage,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/settings',
+      component: SettingsPage,
     }),
     createRoute({
       getParentRoute: () => rootRoute,

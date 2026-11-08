@@ -5,6 +5,10 @@ test.describe.configure({ mode: 'serial' });
 
 async function openSouls(page: Page) {
   await signInAsOwner(page);
+  await page
+    .getByRole('navigation', { name: 'Main' })
+    .getByRole('link', { name: 'Settings' })
+    .click();
   await page.getByRole('link', { name: 'Souls' }).click();
   await expect(page).toHaveURL(/\/souls$/);
   await expect(

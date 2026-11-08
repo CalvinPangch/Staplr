@@ -6,7 +6,8 @@ import {
   useRouterState,
   type ErrorComponentProps,
 } from '@tanstack/react-router';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { fetchProjects, projectsKey } from '../features/projects/api';
 import { api, errorMessage } from '../lib/api';
 import { readTheme, saveTheme, type ThemeChoice } from '../lib/theme';
 import { Button } from '../components/ui/Button';
@@ -15,13 +16,8 @@ const publicPaths = ['/setup', '/sign-in'];
 const localHosts = ['localhost', '127.0.0.1', '[::1]'];
 
 const navItems = [
-  { to: '/settings/source-control', label: 'Source control' },
-  { to: '/settings/providers', label: 'Providers' },
   { to: '/projects', label: 'Projects' },
-  { to: '/souls', label: 'Souls' },
-  { to: '/agents', label: 'Agents' },
-  { to: '/audit', label: 'Audit' },
-  { to: '/diagnostics', label: 'Diagnostics' },
+  { to: '/settings', label: 'Settings' },
 ] as const;
 
 function InsecureBanner() {
@@ -40,7 +36,7 @@ function InsecureBanner() {
   );
 }
 
-function ThemeSelect() {
+export function ThemeSelect() {
   const [choice, setChoice] = useState<ThemeChoice>(readTheme);
   return (
     <label className="flex items-center gap-2 text-sm">
@@ -62,7 +58,7 @@ function ThemeSelect() {
   );
 }
 
-function SignOutButton() {
+export function SignOutButton() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [busy, setBusy] = useState(false);
@@ -89,6 +85,34 @@ function SignOutButton() {
 export function AppShell() {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const signedIn = !publicPaths.includes(path);
+  const projects = useQuery({
+    queryKey: projectsKey,
+    queryFn: fetchProjects,
+    enabled: signedIn,
+  });
+  const isSettingsPath = [
+    '/settings',
+    '/souls',
+    '/agents',
+    '/audit',
+    '/diagnostics',
+  ].some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
+  const currentSection = isSettingsPath
+    ? 'Settings'
+    : path.startsWith('/projects')
+      ? 'Projects'
+      : 'Overview';
+  const brand = (
+    <>
+      <span className="app-brand-mark" aria-hidden="true">
+        S
+      </span>
+      <span>
+        <strong>Staplr</strong>
+        <small>TEAM WORKSPACE</small>
+      </span>
+    </>
+  );
   return (
     <>
       <a
@@ -98,36 +122,84 @@ export function AppShell() {
         Skip to main content
       </a>
       <InsecureBanner />
-      <header className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-edge-soft bg-surface px-4 py-2">
-        <span className="text-lg font-bold">Staplr</span>
-        {signedIn && (
-          <nav aria-label="Main" className="flex-1">
-            <ul className="m-0 flex list-none flex-wrap gap-2 p-0">
-              {navItems.map((item) => (
-                <li key={item.to}>
-                  <Link
-                    to={item.to}
-                    className="inline-flex min-h-11 items-center rounded-lg px-3 text-fg no-underline hover:bg-surface-strong"
-                    activeProps={{
-                      'aria-current': 'page',
-                      className:
-                        'inline-flex min-h-11 items-center rounded-lg px-3 font-semibold text-fg underline',
-                    }}
-                  >
-                    {item.label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </nav>
-        )}
-        {!signedIn && <div className="flex-1" />}
-        <ThemeSelect />
-        {signedIn && <SignOutButton />}
-      </header>
-      <main id="main" tabIndex={-1} className="mx-auto w-full max-w-5xl p-4">
-        <Outlet />
-      </main>
+      <div className="app-layout">
+        <header className="app-sidebar">
+          {signedIn ? (
+            <Link to="/" className="app-brand" aria-label="Staplr home">
+              {brand}
+            </Link>
+          ) : (
+            <div className="app-brand">{brand}</div>
+          )}
+          {signedIn && (
+            <nav
+              id="workspace-navigation"
+              aria-label="Main"
+              className="app-nav"
+            >
+              <p className="app-nav-label">WORKSPACE</p>
+              <ul>
+                {navItems.map((item) => (
+                  <li key={item.to}>
+                    <Link
+                      to={item.to}
+                      className="app-nav-link"
+                      activeProps={{
+                        'aria-current': 'page',
+                        className: 'app-nav-link active',
+                      }}
+                    >
+                      <span className="app-nav-dot" aria-hidden="true" />
+                      {item.label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+              <p className="app-nav-label mt-6">YOUR PROJECTS</p>
+              {projects.isPending ? (
+                <p className="sidebar-message">Loading projects…</p>
+              ) : projects.isError ? (
+                <p className="sidebar-message">Could not load projects.</p>
+              ) : projects.data?.length ? (
+                <ul>
+                  {projects.data.map((project) => (
+                    <li key={project.id}>
+                      <Link
+                        to="/projects/$projectId"
+                        params={{ projectId: project.id }}
+                        className="app-nav-link project-nav-link"
+                        activeProps={{
+                          'aria-current': 'page',
+                          className: 'app-nav-link project-nav-link active',
+                        }}
+                      >
+                        <span className="app-nav-dot" aria-hidden="true" />
+                        <span>{project.name}</span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="sidebar-message">No projects yet.</p>
+              )}
+            </nav>
+          )}
+          {!signedIn && (
+            <div className="app-sidebar-footer">
+              <ThemeSelect />
+            </div>
+          )}
+        </header>
+        <div className="app-content">
+          <div className="app-topbar">
+            <span>YOUR WORKSPACE</span>
+            <span>Staplr / {currentSection}</span>
+          </div>
+          <main id="main" tabIndex={-1} className="app-main">
+            <Outlet />
+          </main>
+        </div>
+      </div>
     </>
   );
 }

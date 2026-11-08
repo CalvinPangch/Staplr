@@ -39,7 +39,7 @@ export function DiagnosticsPage() {
           {events.map((event) => (
             <li
               key={event.id}
-              className="flex flex-col gap-1 rounded-lg border border-edge-soft bg-surface p-4"
+              className="resource-card flex flex-col gap-1 rounded-lg border border-edge-soft bg-bg p-4"
             >
               <p className="m-0 font-medium">{event.message}</p>
               <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">

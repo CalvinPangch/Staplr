@@ -63,7 +63,7 @@ export function AuditPage() {
         empty={<p>No audit entries yet.</p>}
         onRetry={() => void query.refetch()}
       >
-        <div className="overflow-x-auto">
+        <div className="data-table overflow-x-auto">
           <table className="w-full border-collapse text-left">
             <caption className="sr-only">Audit entries, newest first</caption>
             <thead>

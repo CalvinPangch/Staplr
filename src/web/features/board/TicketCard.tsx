@@ -28,7 +28,7 @@ export function TicketCardView({
   return (
     <div
       className={cn(
-        'flex flex-col gap-2 rounded-lg border border-edge bg-bg p-3 shadow-sm',
+        'board-ticket flex flex-col gap-2 rounded-lg border border-edge-soft bg-bg p-3 shadow-sm',
         dragging && 'shadow-lg ring-2 ring-primary',
       )}
     >

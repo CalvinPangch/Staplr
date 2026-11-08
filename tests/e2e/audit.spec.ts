@@ -12,6 +12,10 @@ test('shows an explicit empty state before anything has been recorded', async ({
   await page.route('**/api/audit-entries*', (route) =>
     route.fulfill({ json: [] }),
   );
+  await page
+    .getByRole('navigation', { name: 'Main' })
+    .getByRole('link', { name: 'Settings' })
+    .click();
   await page.getByRole('link', { name: 'Audit' }).click();
   await expect(page).toHaveURL(/\/audit$/);
   await expect(page.getByRole('heading', { name: 'Audit log' })).toBeVisible();

@@ -19,6 +19,10 @@ const key = 'sk-ant-e2eAgentKeyValue-0001';
 
 async function openAgents(page: Page) {
   await signInAsOwner(page);
+  await page
+    .getByRole('navigation', { name: 'Main' })
+    .getByRole('link', { name: 'Settings' })
+    .click();
   await page.getByRole('link', { name: 'Agents' }).click();
   await expect(page).toHaveURL(/\/agents$/);
   await expect(

@@ -20,6 +20,10 @@ const nextKey = 'sk-ant-e2eNextKeyValue-0002';
 
 async function openProviders(page: Page) {
   await signInAsOwner(page);
+  await page
+    .getByRole('navigation', { name: 'Main' })
+    .getByRole('link', { name: 'Settings' })
+    .click();
   await page.getByRole('link', { name: 'Providers' }).click();
   await expect(page).toHaveURL(/\/settings\/providers$/);
   await expect(

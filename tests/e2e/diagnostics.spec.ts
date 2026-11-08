@@ -4,6 +4,10 @@ test.describe.configure({ mode: 'serial' });
 
 test('is empty until something fails', async ({ page }) => {
   await signInAsOwner(page);
+  await page
+    .getByRole('navigation', { name: 'Main' })
+    .getByRole('link', { name: 'Settings' })
+    .click();
   await page.getByRole('link', { name: 'Diagnostics' }).click();
   await expect(page).toHaveURL(/\/diagnostics$/);
   await expect(page.getByText('No errors recorded.')).toBeVisible();

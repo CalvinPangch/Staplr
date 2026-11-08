@@ -41,6 +41,20 @@ const audit = () =>
     .all() as { action: string; targetName: string; detail: string }[];
 
 describe('adding a connection', () => {
+  it('verifies a fine-grained token using valid empty JSON permission probes', async () => {
+    f.fake.github.setToken('github_pat_valid', {
+      login: 'octo',
+      kind: 'fine',
+      repos: [{ id: 1, fullName: 'octo/hello', defaultBranch: 'main' }],
+    });
+    const reply = await add('fine-grained', 'github_pat_valid');
+    expect(reply.statusCode).toBe(201);
+    expect(reply.json().grantedPermissions).toEqual([
+      'read_contents',
+      'push',
+      'create_pull_request',
+    ]);
+  });
   it('seals the token, shows only its last 4 characters and records an audit entry', async () => {
     const token = 'ghp_integrationTokenValue0042';
     f.fake.github.setToken(token, classic());

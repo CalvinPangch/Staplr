@@ -90,6 +90,10 @@ for (const theme of themes) {
 
 test('the theme can be changed and is remembered', async ({ page }) => {
   await signInAsOwner(page);
+  await page
+    .getByRole('navigation', { name: 'Main' })
+    .getByRole('link', { name: 'Settings' })
+    .click();
   await page.getByLabel('Theme').selectOption('dark');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await page.reload();

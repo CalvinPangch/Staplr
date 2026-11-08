@@ -22,7 +22,7 @@ export function SignInPage() {
   });
 
   return (
-    <div className="mx-auto flex max-w-md flex-col gap-4">
+    <div className="auth-panel mx-auto flex max-w-md flex-col gap-4">
       <h1>Sign in</h1>
       {serverError && (
         <p

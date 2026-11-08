@@ -34,7 +34,7 @@ export function SetupPage() {
   });
 
   return (
-    <div className="mx-auto flex max-w-md flex-col gap-4">
+    <div className="auth-panel mx-auto flex max-w-md flex-col gap-4">
       <h1>Create the owner account</h1>
       <p className="text-muted">
         This installation has one owner. Choose a username and a password of at

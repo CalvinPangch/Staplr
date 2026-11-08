@@ -192,19 +192,25 @@ export async function startPlatformFake(port = 0): Promise<PlatformFake> {
                   message: 'Resource not accessible by personal access token',
                 })
               : json(response, 200, []);
-          if (method === 'PUT')
+          if (method === 'PUT') {
+            if (body !== '{}')
+              return json(response, 400, { message: 'Invalid JSON' });
             return profile.contentsWrite === false
               ? json(response, 403, {
                   message: 'Resource not accessible by personal access token',
                 })
               : json(response, 422, { message: 'Invalid request' });
+          }
         }
-        if (tail === '/pulls' && method === 'POST')
+        if (tail === '/pulls' && method === 'POST') {
+          if (body !== '{}')
+            return json(response, 400, { message: 'Invalid JSON' });
           return profile.prWrite === false
             ? json(response, 403, {
                 message: 'Resource not accessible by personal access token',
               })
             : json(response, 422, { message: 'Validation Failed' });
+        }
         if (tail === '/branches' && method === 'GET' && repo)
           return json(
             response,

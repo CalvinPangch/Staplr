@@ -73,7 +73,7 @@ export function ConnectionCard({
   }
 
   return (
-    <li className="flex flex-col gap-3 rounded-lg border border-edge-soft bg-surface p-4">
+    <li className="resource-card flex flex-col gap-3 rounded-lg border border-edge-soft bg-bg p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="break-all text-lg font-semibold">{connection.name}</h2>
         <StatusBadge
