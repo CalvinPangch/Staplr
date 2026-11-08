@@ -11,7 +11,7 @@ import { Select } from '../../components/ui/Select';
 import { StatusBadge } from '../../components/ui/StatusBadge';
 import { agentsKey, useAgents } from '../agents/api';
 import { providerName } from '../providers/api';
-import { roleLabels } from '../souls/api';
+import { roleLabels } from '../agents/api';
 import { projectKey, projectsKey, teamKey, useTeam } from './api';
 
 const roleNames = {

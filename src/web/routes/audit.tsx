@@ -34,6 +34,7 @@ const actionLabels: Record<string, string> = {
   'price.changed': 'Model price changed',
   'models.discovered': 'Codex models found',
   'prices.refreshed': 'Prices read from the official page',
+  'agents.upgraded': 'Agent file made at upgrade (description left out)',
 };
 
 export function AuditPage() {

@@ -257,53 +257,6 @@ paths:
       summary: Check now for every connection
       responses: { '202': { description: Started; results appear on each connection } }
 
-  # ---------- Souls (FR-015..019) ----------
-  /api/souls:
-    get:
-      summary: List souls
-      responses: { '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Soul' } } } } } }
-    post:
-      summary: Create a soul from scratch (roleType project_manager rejected)
-      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/SoulInput' } } } }
-      responses:
-        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Soul' } } } }
-        '409': { $ref: '#/components/responses/Problem' }
-        '422': { $ref: '#/components/responses/Problem' }
-  /api/souls/{id}:
-    parameters: [ { $ref: '#/components/parameters/Id' } ]
-    get:
-      summary: Get soul
-      responses:
-        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Soul' } } } }
-        '404': { $ref: '#/components/responses/Problem' }
-    put:
-      summary: Edit a custom soul (defaults are read-only → 403); roleType cannot change
-      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/SoulInput' } } } }
-      responses:
-        '200': { description: Updated; body lists affected agents, content: { application/json: { schema: { $ref: '#/components/schemas/Soul' } } } }
-        '403': { $ref: '#/components/responses/Problem' }
-        '404': { $ref: '#/components/responses/Problem' }
-        '409': { $ref: '#/components/responses/Problem' }
-        '422': { $ref: '#/components/responses/Problem' }
-    delete:
-      summary: Delete a custom soul (409 with details.agents when in use)
-      responses:
-        '204': { description: Deleted }
-        '403': { $ref: '#/components/responses/Problem' }
-        '404': { $ref: '#/components/responses/Problem' }
-        '409': { $ref: '#/components/responses/Problem' }
-  /api/souls/{id}/copy:
-    parameters: [ { $ref: '#/components/parameters/Id' } ]
-    post:
-      summary: Copy a soul (keeps roleType)
-      description: Without a name the copy is called "Copy of <name>", numbered if that is taken.
-      requestBody: { content: { application/json: { schema: { type: object, additionalProperties: false, properties: { name: { type: string, minLength: 1, maxLength: 80 } } } } } }
-      responses:
-        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Soul' } } } }
-        '404': { $ref: '#/components/responses/Problem' }
-        '409': { $ref: '#/components/responses/Problem' }
-        '422': { $ref: '#/components/responses/Problem' }
-
   # ---------- Agents + models (FR-020..024) ----------
   /api/models:
     get:
@@ -327,16 +280,23 @@ paths:
         '404': { $ref: '#/components/responses/Problem' }
         '422': { $ref: '#/components/responses/Problem' }
 
+  /api/agent-templates:
+    get:
+      summary: Role templates for a new agent (feature 003), each a ready agent file
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { type: object, required: [templates], properties: { templates: { type: array, items: { $ref: '#/components/schemas/AgentTemplate' } } } } } }
   /api/agents:
     get:
       summary: List agents with readiness
       responses: { '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Agent' } } } } } }
     post:
-      summary: Create agent
-      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AgentInput' } } } }
+      summary: Create an agent from its Markdown file (feature 003)
+      description: 422 code agent_file_invalid lists every problem in details.problems as { line, field, message }.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AgentCreate' } } } }
       responses:
         '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Agent' } } } }
-        '409': { $ref: '#/components/responses/Problem' }
         '422': { $ref: '#/components/responses/Problem' }
   /api/agents/{id}:
     parameters: [ { $ref: '#/components/parameters/Id' } ]
@@ -346,8 +306,9 @@ paths:
         '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Agent' } } } }
         '404': { $ref: '#/components/responses/Problem' }
     put:
-      summary: Edit agent (409 code pm_rule_violation with details.projects when a soul change breaks exactly-one-PM)
-      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AgentInput' } } } }
+      summary: Save the agent's Markdown file (feature 003)
+      description: 409 code agent_changed when revision is not the current one (details.revision); 422 code agent_file_invalid lists every problem in details.problems, including the one-Project-Manager rule on the role line.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AgentUpdate' } } } }
       responses:
         '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/Agent' } } } }
         '404': { $ref: '#/components/responses/Problem' }
@@ -670,42 +631,42 @@ components:
         instructions: { type: string, description: Provider-specific steps shown beside the terminal }
         resultConnectionId: { type: [string, 'null'] }
         expiresAt: { type: string, format: date-time }
-    SoulInput:
+    AgentCreate:
       type: object
-      required: [name, roleType, description, instructions]
+      additionalProperties: false
+      required: [definition]
       properties:
-        name: { type: string, minLength: 1, maxLength: 80 }
-        roleType: { $ref: '#/components/schemas/RoleType' }
-        description: { type: string, maxLength: 500 }
-        instructions: { type: string, maxLength: 20000 }
-    Soul:
-      allOf:
-        - $ref: '#/components/schemas/SoulInput'
-        - type: object
-          properties:
-            id: { type: string }
-            isDefault: { type: boolean }
-            copiedFromId: { type: [string, 'null'] }
-            usedByAgents: { type: array, items: { type: object, properties: { id: { type: string }, name: { type: string } } } }
-    AgentInput:
+        definition: { type: string, minLength: 1, maxLength: 20000, description: 'The agent file: a settings header (name, role, provider, connection, model) between --- lines, then the instructions' }
+    AgentUpdate:
       type: object
-      required: [name, soulId, provider, providerConnectionId, model]
+      additionalProperties: false
+      required: [definition, revision]
       properties:
-        name: { type: string, minLength: 1, maxLength: 80 }
-        soulId: { type: string }
-        provider: { $ref: '#/components/schemas/Provider' }
-        providerConnectionId: { type: string }
-        model: { type: string }
+        definition: { type: string, minLength: 1, maxLength: 20000 }
+        revision: { type: integer, minimum: 1, description: The revision the editor loaded }
+    AgentTemplate:
+      type: object
+      additionalProperties: false
+      required: [id, role, label, kind, definition]
+      properties:
+        id: { type: string }
+        role: { $ref: '#/components/schemas/RoleType' }
+        label: { type: string }
+        kind: { type: string, enum: [shipped, kept], description: kept = from a custom soul no agent used at the upgrade }
+        definition: { type: string }
     Agent:
       type: object
+      required: [id, name, role, provider, providerConnectionId, connectionName, model, definition, revision, readiness, reasons, projects]
       properties:
         id: { type: string }
         name: { type: string }
-        soulId: { type: string }
         role: { $ref: '#/components/schemas/RoleType' }
         provider: { $ref: '#/components/schemas/Provider' }
         providerConnectionId: { type: [string, 'null'] }
-        model: { type: string }
+        connectionName: { type: [string, 'null'], description: As written in the file; may name a removed connection }
+        model: { type: [string, 'null'] }
+        definition: { type: string, description: The agent file exactly as saved }
+        revision: { type: integer, minimum: 1 }
         readiness: { type: string, enum: [ready, not_ready] }
         reasons: { type: array, items: { $ref: '#/components/schemas/ReadinessReason' } }
         projects: { type: array, items: { type: object, properties: { id: { type: string }, name: { type: string } } } }
@@ -813,7 +774,7 @@ components:
       properties:
         id: { type: string }
         at: { type: string, format: date-time }
-        action: { type: string, enum: [scc.added, scc.replaced, scc.removed, provider.added, provider.replaced, provider.relogged, provider.removed, soul.created, soul.updated, soul.copied, soul.deleted, agent.created, agent.updated, agent.deleted, project.created, project.deleted, price.changed, models.discovered, prices.refreshed] }
+        action: { type: string, enum: [scc.added, scc.replaced, scc.removed, provider.added, provider.replaced, provider.relogged, provider.removed, soul.created, soul.updated, soul.copied, soul.deleted, agent.created, agent.updated, agent.deleted, project.created, project.deleted, price.changed, models.discovered, prices.refreshed, agents.upgraded] }
         targetType: { type: string }
         targetId: { type: string }
         targetName: { type: string }

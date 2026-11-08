@@ -10,7 +10,7 @@ import { useAnnounce } from '../../components/ui/LiveRegion';
 import { StatusBadge } from '../../components/ui/StatusBadge';
 import { agentsKey, useAgents } from '../../features/agents/api';
 import { providerName } from '../../features/providers/api';
-import { roleLabels } from '../../features/souls/api';
+import { roleLabels } from '../../features/agents/api';
 
 function AgentCard({
   agent,
@@ -111,9 +111,9 @@ export function AgentsPage() {
         </Link>
       </div>
       <p className="text-muted">
-        An agent is a soul (its role) running on a provider connection with a
-        model you choose. Only models verified for that exact connection can be
-        picked.
+        Each agent is one Markdown file: a short settings header (name, role,
+        provider, connection and model) followed by its working instructions.
+        Only models verified for that exact connection can be used.
       </p>
       {error && (
         <div
@@ -137,8 +137,8 @@ export function AgentsPage() {
         isEmpty={agents.length === 0}
         empty={
           <p>
-            No agents yet. Connect a provider, then create an agent to give a
-            soul a model to run on.
+            No agents yet. Connect a provider, then create an agent from one of
+            the role templates.
           </p>
         }
         onRetry={() => void query.refetch()}
@@ -161,7 +161,7 @@ export function AgentsPage() {
         open={deleting !== null}
         onOpenChange={(open) => !open && setDeleting(null)}
         title={`Delete ${deleting?.name ?? 'this agent'}?`}
-        description="The agent is removed. Its souls and provider connection are not affected."
+        description="The agent and its file are removed. Its provider connection is not affected."
         confirmLabel="Delete agent"
         destructive
         busy={removing}

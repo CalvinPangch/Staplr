@@ -404,7 +404,7 @@ function ProjectDetail({ project }: { project: Project }) {
           </ul>
           <p className="font-medium">This keeps:</p>
           <ul className="list-disc pl-6">
-            <li>your agents, souls and provider connections</li>
+            <li>your agents and provider connections</li>
             <li>usage records, shown as “Deleted project”</li>
             <li>the repository on GitHub or GitLab</li>
           </ul>

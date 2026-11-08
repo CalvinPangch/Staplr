@@ -2,11 +2,40 @@
 
 Staplr is a self-hosted web app for setting up an AI development team: connect GitHub or GitLab,
 connect Claude (your own Anthropic API key) and Codex (a login you complete in an isolated
-sandbox), define reusable roles ("souls"), build agents, add projects, assemble each project's
-team, and track tickets on a Kanban board. One owner manages everything; all data stays on your
+sandbox), build agents, add projects, assemble each project's team, and track tickets on a
+Kanban board. One owner manages everything; all data stays on your
 installation.
 
 This release covers **setup and the manual board only**. Agents do not yet run on tickets.
+
+## Agents are Markdown files
+
+Each agent is one Markdown file, edited on the agent's page: a short settings header, then the
+agent's working instructions.
+
+```markdown
+---
+name: Dev Agent
+role: developer
+provider: claude
+connection: Work Claude
+model: claude-sonnet-5-5
+---
+
+# Developer
+
+You implement tickets in small, reviewed steps...
+```
+
+- A new agent starts from a role template: Project Manager, Business Analyst, Developer or QA.
+- `role` is one of `project_manager`, `business_analyst`, `developer`, `qa`, `custom`;
+  `provider` is `claude` or `codex`; `connection` and `model` may stay empty (the agent is then
+  Not ready). Helpers on the page insert a connection and a model verified for it.
+- Saving checks the whole file and lists every problem with its line number. A save never
+  overwrites a newer version made in another tab, and renaming a connection updates every file
+  that uses it. Each project still needs exactly one Project Manager.
+- Upgrading from a release with "souls" gives every agent its own file with its soul's text;
+  custom souls no agent used become extra templates.
 
 ## Install with Docker Compose
 

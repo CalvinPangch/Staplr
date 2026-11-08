@@ -13,14 +13,10 @@ const sections = [
     description: 'Manage AI connections, model access, and pricing.',
   },
   {
-    to: '/souls',
-    title: 'Souls',
-    description: 'Define the roles and instructions your agents use.',
-  },
-  {
     to: '/agents',
     title: 'Agents',
-    description: 'Configure agents and the models they use.',
+    description:
+      'Each agent is one Markdown file: its role, model and instructions.',
   },
   {
     to: '/audit',

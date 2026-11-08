@@ -1,7 +1,10 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z, type ZodError } from 'zod';
 import { sendProblem, ServiceError } from '../../lib/problem.js';
-import { agentInputSchema } from '../../../shared/schemas/agents.js';
+import {
+  agentCreateSchema,
+  agentUpdateSchema,
+} from '../../../shared/schemas/agents.js';
 import type { AgentService } from './service.js';
 
 const idParams = z.object({ id: z.string().min(1).max(100) });
@@ -32,8 +35,11 @@ export function agentRoutes(app: FastifyInstance, service: AgentService) {
 
   app.get(base, () => service.list());
 
+  /** Role templates for a new agent, each a ready agent file (feature 003). */
+  app.get('/api/agent-templates', () => ({ templates: service.templates() }));
+
   app.post(base, (request, reply) => {
-    const parsed = agentInputSchema.safeParse(request.body);
+    const parsed = agentCreateSchema.safeParse(request.body);
     if (!parsed.success) return invalid(reply, parsed.error);
     try {
       return reply.code(201).send(service.create(parsed.data));
@@ -54,7 +60,7 @@ export function agentRoutes(app: FastifyInstance, service: AgentService) {
 
   app.put(`${base}/:id`, (request, reply) => {
     const params = idParams.safeParse(request.params);
-    const parsed = agentInputSchema.safeParse(request.body);
+    const parsed = agentUpdateSchema.safeParse(request.body);
     if (!params.success) return invalid(reply, params.error);
     if (!parsed.success) return invalid(reply, parsed.error);
     try {

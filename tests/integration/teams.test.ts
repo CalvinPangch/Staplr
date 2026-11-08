@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { platformFixture } from './helpers';
 import { createGitRemote, type GitRemote } from '../fakes/git-remote';
+import { agentBody, agentChange, type AgentSpec } from './agent-helpers';
 
 let f: Awaited<ReturnType<typeof platformFixture>>;
 let remote: GitRemote;
@@ -49,12 +50,6 @@ interface Project {
   reasons: { code: string; agentId?: string }[];
 }
 
-const souls = async () =>
-  (await f.call('GET', '/api/souls')).json() as {
-    id: string;
-    roleType: string;
-    isDefault: boolean;
-  }[];
 let connectionId = '';
 async function providerConnection() {
   if (!connectionId) {
@@ -70,17 +65,18 @@ async function providerConnection() {
   }
   return connectionId;
 }
-async function agent(name: string, role: string) {
-  const soulId = (await souls()).find(
-    (s) => s.isDefault && s.roleType === role,
-  )?.id;
-  const reply = await f.call('POST', '/api/agents', {
-    name,
-    soulId,
-    provider: 'claude',
-    providerConnectionId: await providerConnection(),
-    model: 'claude-sonnet-5-5',
-  });
+async function agent(name: string, role: AgentSpec['role']) {
+  const reply = await f.call(
+    'POST',
+    '/api/agents',
+    await agentBody(f, {
+      name,
+      role,
+      provider: 'claude',
+      providerConnectionId: await providerConnection(),
+      model: 'claude-sonnet-5-5',
+    }),
+  );
   expect(reply.statusCode).toBe(201);
   return reply.json().id as string;
 }
@@ -297,63 +293,56 @@ describe('guards on agents', () => {
     expect((await f.call('DELETE', `/api/agents/${dev}`)).statusCode).toBe(204);
   });
 
-  it('blocks a soul change that would leave a project without a Project Manager', async () => {
+  /** The single problem on the role line of a refused agent file (feature 003, US4). */
+  const roleProblem = (reply: { json(): unknown }) =>
+    (
+      reply.json() as {
+        details: {
+          problems: { line: number; field: string; message: string }[];
+        };
+      }
+    ).details.problems.find((p) => p.field === 'role');
+
+  it('blocks a role change that would leave a project without a Project Manager', async () => {
     const id = await project();
     const pm = await agent('Pat', 'project_manager');
     await assign(id, pm);
-    const devSoul = (await souls()).find(
-      (s) => s.isDefault && s.roleType === 'developer',
-    )?.id;
-    const current = (await f.call('GET', `/api/agents/${pm}`)).json();
-    const blocked = await f.call('PUT', `/api/agents/${pm}`, {
-      name: current.name,
-      soulId: devSoul,
-      provider: current.provider,
-      providerConnectionId: current.providerConnectionId,
-      model: current.model,
-    });
-    expect(blocked.statusCode).toBe(409);
-    expect(blocked.json().code).toBe('pm_rule_violation');
-    expect(blocked.json().details.projects).toEqual([{ id, name: 'app' }]);
+    const blocked = await f.call(
+      'PUT',
+      `/api/agents/${pm}`,
+      await agentChange(f, pm, { role: 'developer' }),
+    );
+    expect(blocked.statusCode).toBe(422);
+    expect(blocked.json().code).toBe('agent_file_invalid');
+    expect(roleProblem(blocked)).toMatchObject({ line: 3 });
+    expect(roleProblem(blocked)?.message).toMatch(/app/);
     expect((await f.call('GET', `/api/agents/${pm}`)).json().role).toBe(
       'project_manager',
     );
   });
 
-  it('blocks a soul change that would give a project two Project Managers', async () => {
+  it('blocks a role change that would give a project two Project Managers', async () => {
     const id = await project();
     const pm = await agent('Pat', 'project_manager');
     const dev = await agent('Dee', 'developer');
     await assign(id, pm);
     await assign(id, dev);
-    const pmSoul = (await souls()).find(
-      (s) => s.isDefault && s.roleType === 'project_manager',
-    )?.id;
-    const current = (await f.call('GET', `/api/agents/${dev}`)).json();
-    const blocked = await f.call('PUT', `/api/agents/${dev}`, {
-      name: current.name,
-      soulId: pmSoul,
-      provider: current.provider,
-      providerConnectionId: current.providerConnectionId,
-      model: current.model,
-    });
-    expect(blocked.statusCode).toBe(409);
-    expect(blocked.json().code).toBe('pm_rule_violation');
+    const blocked = await f.call(
+      'PUT',
+      `/api/agents/${dev}`,
+      await agentChange(f, dev, { role: 'project_manager' }),
+    );
+    expect(blocked.statusCode).toBe(422);
+    expect(roleProblem(blocked)?.message).toMatch(/app/);
   });
 
-  it('allows a soul change on an agent that is on no team', async () => {
+  it('allows a role change on an agent that is on no team', async () => {
     const dev = await agent('Dee', 'developer');
-    const pmSoul = (await souls()).find(
-      (s) => s.isDefault && s.roleType === 'project_manager',
-    )?.id;
-    const current = (await f.call('GET', `/api/agents/${dev}`)).json();
-    const changed = await f.call('PUT', `/api/agents/${dev}`, {
-      name: current.name,
-      soulId: pmSoul,
-      provider: current.provider,
-      providerConnectionId: current.providerConnectionId,
-      model: current.model,
-    });
+    const changed = await f.call(
+      'PUT',
+      `/api/agents/${dev}`,
+      await agentChange(f, dev, { role: 'project_manager' }),
+    );
     expect(changed.statusCode).toBe(200);
     expect(changed.json().role).toBe('project_manager');
   });

@@ -4,43 +4,48 @@ import {
   useQueryClient,
   type QueryClient,
 } from '@tanstack/react-query';
-import { Link, useNavigate, useParams } from '@tanstack/react-router';
-import { Controller, useForm, useWatch } from 'react-hook-form';
 import {
-  agentInputSchema,
-  type Agent,
-  type AgentInput,
-} from '../../../shared/schemas/agents';
+  Link,
+  useBlocker,
+  useNavigate,
+  useParams,
+} from '@tanstack/react-router';
+import {
+  headerValue,
+  instructionsOf,
+  maxAgentFileLength,
+  replaceInstructions,
+  setHeaderValue,
+  type FileProblem,
+} from '../../../shared/agent-file';
+import type { Agent, AgentTemplate } from '../../../shared/schemas/agents';
 import type { ModelAccess } from '../../../shared/schemas/providers';
-import { api, errorMessage } from '../../lib/api';
-import { zodResolver } from '../../lib/zodResolver';
+import { api, ApiError, errorMessage } from '../../lib/api';
 import { Button } from '../../components/ui/Button';
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { DataState } from '../../components/ui/DataState';
 import { useAnnounce } from '../../components/ui/LiveRegion';
 import { Select } from '../../components/ui/Select';
 import { StatusBadge } from '../../components/ui/StatusBadge';
-import { TextField } from '../../components/ui/TextField';
+import { TextArea } from '../../components/ui/TextArea';
 import {
   agentsKey,
   availabilityText,
   fetchModels,
   modelStatusText,
   modelsKey,
+  roleLabels,
+  useAgentTemplates,
   useAgents,
 } from '../../features/agents/api';
-import { discoveryPollMs } from '../../features/providers/api';
-import { ModelPrice } from '../../features/prices/ModelPrice';
+import { AgentFileEditor } from '../../features/agents/AgentFileEditor';
 import {
+  discoveryPollMs,
   providerName,
   useProviderConnections,
 } from '../../features/providers/api';
-import { roleLabels, useSouls } from '../../features/souls/api';
+import { ModelPrice } from '../../features/prices/ModelPrice';
 import { formatTime } from '../../features/source-control/api';
-
-const providerOptions = [
-  { value: 'claude', label: providerName.claude },
-  { value: 'codex', label: providerName.codex },
-];
 
 function ModelList({
   connectionId,
@@ -128,32 +133,96 @@ function ModelList({
   );
 }
 
-function Editor({ agent }: { agent: Agent | null }) {
+function TemplatePicker({
+  onPick,
+}: {
+  onPick: (template: AgentTemplate) => void;
+}) {
+  const templates = useAgentTemplates();
+  const shipped = (templates.data ?? []).filter((t) => t.kind === 'shipped');
+  const kept = (templates.data ?? []).filter((t) => t.kind === 'kept');
+  const group = (title: string, list: AgentTemplate[]) => (
+    <section aria-label={title} className="flex flex-col gap-2">
+      <h2 className="text-base">{title}</h2>
+      <ul className="m-0 grid list-none gap-2 p-0 sm:grid-cols-2">
+        {list.map((template) => (
+          <li key={template.id}>
+            <Button
+              className="w-full justify-start text-left"
+              onClick={() => onPick(template)}
+            >
+              {template.label}
+              <span className="ml-2 text-sm text-muted">
+                {roleLabels[template.role]}
+              </span>
+            </Button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+  return (
+    <div className="flex flex-col gap-4">
+      <h1>New agent</h1>
+      <p className="text-muted">
+        Choose a role to start from. You get the agent's Markdown file with that
+        role's instructions, ready to name and connect.
+      </p>
+      <DataState
+        what="the role templates"
+        isLoading={templates.isPending}
+        error={templates.error}
+        isEmpty={templates.isSuccess && templates.data.length === 0}
+        empty={<p>No role templates are available. Reload the page.</p>}
+        onRetry={() => void templates.refetch()}
+      >
+        {group('Roles', shipped)}
+        {kept.length > 0 && group('Kept from your earlier souls', kept)}
+      </DataState>
+      <Link
+        to="/agents"
+        className="inline-flex min-h-11 items-center self-start rounded-lg border border-edge bg-bg px-4 py-2 hover:bg-surface"
+      >
+        Cancel
+      </Link>
+    </div>
+  );
+}
+
+function Editor({ agent, initial }: { agent: Agent | null; initial: string }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const announce = useAnnounce();
-  const souls = useSouls();
   const connections = useProviderConnections();
+  const templates = useAgentTemplates();
+  const [text, setText] = useState(initial);
+  const [saved, setSaved] = useState(initial);
+  const [revision, setRevision] = useState(agent?.revision ?? 1);
+  const [serverProblems, setServerProblems] = useState<FileProblem[]>([]);
   const [serverError, setServerError] = useState<string | null>(null);
-  const {
-    register,
-    control,
-    handleSubmit,
-    setValue,
-    formState: { errors, isSubmitting },
-  } = useForm<AgentInput>({
-    resolver: zodResolver(agentInputSchema),
-    defaultValues: {
-      name: agent?.name ?? '',
-      soulId: agent?.soulId ?? '',
-      provider: agent?.provider ?? 'claude',
-      providerConnectionId: agent?.providerConnectionId ?? '',
-      model: agent?.model ?? '',
-    },
+  const [stale, setStale] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [replacing, setReplacing] = useState(false);
+  const leaving = useRef(false);
+  const dirty = text !== saved;
+
+  const blocker = useBlocker({
+    shouldBlockFn: () => dirty && !leaving.current,
+    enableBeforeUnload: () => dirty && !leaving.current,
+    withResolver: true,
   });
-  const provider = useWatch({ control, name: 'provider' });
-  const connectionId = useWatch({ control, name: 'providerConnectionId' });
-  const model = useWatch({ control, name: 'model' });
+
+  const provider =
+    headerValue(text, 'provider') === 'codex' ? 'codex' : 'claude';
+  const role = headerValue(text, 'role');
+  const connectionName = headerValue(text, 'connection');
+  const providerConnections = (connections.data ?? []).filter(
+    (c) => c.provider === provider,
+  );
+  const connection = providerConnections.find(
+    (c) => c.name.toLowerCase() === connectionName.toLowerCase(),
+  );
+  const connectionId = connection?.id ?? '';
   const candidates = useQuery({
     queryKey: modelsKey(connectionId),
     queryFn: () => fetchModels(connectionId),
@@ -173,29 +242,61 @@ function Editor({ agent }: { agent: Agent | null }) {
     lastDiscovery.current = discovery;
   }, [discovery, announce]);
 
-  const connectionOptions = (connections.data ?? [])
-    .filter((c) => c.provider === provider)
-    .map((c) => ({
-      value: c.id,
-      label:
-        c.status === 'needs_relogin' ? `${c.name} (needs re-login)` : c.name,
-    }));
-  const soulOptions = (souls.data ?? []).map((s) => ({
-    value: s.id,
-    label: `${s.name} (${roleLabels[s.roleType]})`,
-  }));
-  const modelOptions = (candidates.data?.models ?? []).map((m) => ({
-    value: m.id,
-    label:
-      m.availability === 'available' && !m.checking
-        ? m.label
-        : `${m.label} (${modelStatusText(m).toLowerCase()})`,
-    disabled: m.availability !== 'available' || m.checking === true,
-  }));
-  const savedModelMissing =
-    model !== '' &&
-    candidates.data &&
-    !candidates.data.models.some((m) => m.id === model);
+  const edit = (next: string) => {
+    setText(next);
+    setServerProblems([]);
+  };
+  const available = (candidates.data?.models ?? []).filter(
+    (m) => m.availability === 'available' && !m.checking,
+  );
+  const roleTemplate = (templates.data ?? []).find(
+    (t) => t.kind === 'shipped' && t.role === role,
+  );
+
+  async function save() {
+    setServerError(null);
+    setServerProblems([]);
+    setSaving(true);
+    try {
+      const result = agent
+        ? await api<Agent>(`/api/agents/${agent.id}`, {
+            method: 'PUT',
+            body: { definition: text, revision },
+          })
+        : await api<Agent>('/api/agents', {
+            method: 'POST',
+            body: { definition: text },
+          });
+      setSaved(text);
+      setRevision(result.revision);
+      await queryClient.invalidateQueries({ queryKey: agentsKey });
+      announce(`Saved ${result.name}.`);
+      leaving.current = true;
+      await navigate({ to: '/agents' });
+    } catch (error) {
+      if (error instanceof ApiError && error.code === 'agent_file_invalid') {
+        const problems = (error.details?.problems ?? []) as FileProblem[];
+        setServerProblems(problems);
+        announce(error.message);
+      } else if (error instanceof ApiError && error.code === 'agent_changed') {
+        setStale(text);
+        setServerError(error.message);
+      } else setServerError(errorMessage(error));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function reload() {
+    if (!agent) return;
+    const latest = await api<Agent>(`/api/agents/${agent.id}`);
+    setText(latest.definition);
+    setSaved(latest.definition);
+    setRevision(latest.revision);
+    setServerError(null);
+    setServerProblems([]);
+    await queryClient.invalidateQueries({ queryKey: agentsKey });
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -214,96 +315,66 @@ function Editor({ agent }: { agent: Agent | null }) {
         </ul>
       )}
       {serverError && (
-        <p
+        <div
           role="alert"
-          className="rounded-lg border border-danger bg-danger-soft p-3 text-danger"
+          className="flex flex-col gap-2 rounded-lg border border-danger bg-danger-soft p-3 text-danger"
         >
-          {serverError}
-        </p>
+          <p>{serverError}</p>
+          {stale !== null && (
+            <>
+              <Button className="self-start" onClick={() => void reload()}>
+                Reload
+              </Button>
+              <TextArea
+                label="Your unsaved text (copy it before or after reloading)"
+                value={stale}
+                maxLength={maxAgentFileLength}
+                readOnly
+                rows={6}
+                className="font-mono text-sm"
+              />
+            </>
+          )}
+        </div>
       )}
       <form
         noValidate
         className="flex max-w-3xl flex-col gap-4"
-        onSubmit={handleSubmit(async (values) => {
-          setServerError(null);
-          try {
-            const saved = agent
-              ? await api<Agent>(`/api/agents/${agent.id}`, {
-                  method: 'PUT',
-                  body: values,
-                })
-              : await api<Agent>('/api/agents', {
-                  method: 'POST',
-                  body: values,
-                });
-            await queryClient.invalidateQueries({ queryKey: agentsKey });
-            announce(`Saved ${saved.name}.`);
-            await navigate({ to: '/agents' });
-          } catch (error) {
-            setServerError(errorMessage(error));
-          }
-        })}
+        onSubmit={(event) => {
+          event.preventDefault();
+          void save();
+        }}
       >
-        <TextField
-          label="Name"
-          autoComplete="off"
-          error={errors.name?.message}
-          {...register('name')}
+        <AgentFileEditor
+          value={text}
+          onChange={edit}
+          serverProblems={serverProblems}
         />
-        <Controller
-          control={control}
-          name="soulId"
-          render={({ field }) => (
-            <Select
-              label="Soul"
-              value={field.value === '' ? undefined : field.value}
-              onValueChange={field.onChange}
-              options={soulOptions}
-              placeholder="Choose a soul"
-              error={errors.soulId?.message}
-            />
-          )}
-        />
-        <Controller
-          control={control}
-          name="provider"
-          render={({ field }) => (
-            <Select
-              label="Provider"
-              value={field.value}
-              onValueChange={(value) => {
-                field.onChange(value);
-                setValue('providerConnectionId', '');
-                setValue('model', '');
-              }}
-              options={providerOptions}
-              error={errors.provider?.message}
-            />
-          )}
-        />
-        <div className="flex flex-col gap-2">
-          <Controller
-            control={control}
-            name="providerConnectionId"
-            render={({ field }) => (
-              <Select
-                label="Connection"
-                value={field.value === '' ? undefined : field.value}
-                onValueChange={(value) => {
-                  field.onChange(value);
-                  setValue('model', '');
-                }}
-                options={connectionOptions}
-                placeholder={
-                  connectionOptions.length === 0
-                    ? `No ${providerName[provider]} connection yet`
-                    : 'Choose a connection'
-                }
-                error={errors.providerConnectionId?.message}
-              />
-            )}
+        <div className="flex flex-col gap-3 rounded-lg border border-edge-soft p-3">
+          <p className="text-sm text-muted">
+            These helpers write into the header for you.
+          </p>
+          <Select
+            label={`Insert connection (${providerName[provider]})`}
+            value={connection?.id}
+            onValueChange={(id) => {
+              const chosen = providerConnections.find((c) => c.id === id);
+              if (chosen) edit(setHeaderValue(text, 'connection', chosen.name));
+            }}
+            options={providerConnections.map((c) => ({
+              value: c.id,
+              label:
+                c.status === 'needs_relogin'
+                  ? `${c.name} (needs re-login)`
+                  : c.name,
+            }))}
+            placeholder={
+              providerConnections.length === 0
+                ? `No ${providerName[provider]} connection yet`
+                : 'Choose a connection'
+            }
           />
-          {connections.isSuccess && connectionOptions.length === 0 && (
+          {connections.isSuccess && providerConnections.length === 0 && (
             <p className="text-sm">
               {provider === 'claude'
                 ? 'Claude connects with your own Anthropic API key. '
@@ -313,31 +384,38 @@ function Editor({ agent }: { agent: Agent | null }) {
               </Link>
             </p>
           )}
-        </div>
-        <Controller
-          control={control}
-          name="model"
-          render={({ field }) => (
-            <Select
-              label="Model"
-              value={field.value === '' ? undefined : field.value}
-              onValueChange={field.onChange}
-              options={modelOptions}
-              disabled={connectionId === '' || candidates.isPending}
-              placeholder={
-                connectionId === ''
-                  ? 'Choose a connection first'
+          <Select
+            label="Insert model"
+            value={
+              available.some((m) => m.id === headerValue(text, 'model'))
+                ? headerValue(text, 'model')
+                : undefined
+            }
+            onValueChange={(model) =>
+              edit(setHeaderValue(text, 'model', model))
+            }
+            options={available.map((m) => ({ value: m.id, label: m.label }))}
+            disabled={
+              connectionId === '' ||
+              candidates.isPending ||
+              available.length === 0
+            }
+            placeholder={
+              connectionId === ''
+                ? 'Insert a connection first'
+                : available.length === 0
+                  ? 'No verified model yet'
                   : 'Choose a verified model'
-              }
-              hint={
-                savedModelMissing
-                  ? 'The saved model is no longer offered. Choose another model.'
-                  : 'Models that are not verified for this connection are listed but cannot be chosen.'
-              }
-              error={errors.model?.message}
-            />
+            }
+            hint="Only models verified for this connection are offered."
+          />
+          {roleTemplate && (
+            <Button className="self-start" onClick={() => setReplacing(true)}>
+              Replace instructions with the {roleLabels[roleTemplate.role]}{' '}
+              template
+            </Button>
           )}
-        />
+        </div>
         {connectionId !== '' && (
           <DataState
             what="the models for this connection"
@@ -358,7 +436,7 @@ function Editor({ agent }: { agent: Agent | null }) {
           </DataState>
         )}
         <div className="flex flex-wrap gap-2">
-          <Button type="submit" variant="primary" busy={isSubmitting}>
+          <Button type="submit" variant="primary" busy={saving}>
             {agent ? 'Save changes' : 'Create agent'}
           </Button>
           <Link
@@ -369,6 +447,31 @@ function Editor({ agent }: { agent: Agent | null }) {
           </Link>
         </div>
       </form>
+      <ConfirmDialog
+        open={replacing}
+        onOpenChange={setReplacing}
+        title="Replace the instructions?"
+        description="The text below the header is replaced with the role's template. The header stays as it is. Nothing is saved until you save."
+        confirmLabel="Replace instructions"
+        onConfirm={() => {
+          const body = roleTemplate && instructionsOf(roleTemplate.definition);
+          if (body !== undefined && body !== null)
+            edit(replaceInstructions(text, body));
+          setReplacing(false);
+        }}
+      />
+      <ConfirmDialog
+        open={blocker.status === 'blocked'}
+        onOpenChange={(open) => {
+          if (!open) blocker.reset?.();
+        }}
+        title="Leave without saving?"
+        description="Your changes to this agent's file have not been saved."
+        confirmLabel="Leave without saving"
+        cancelLabel="Keep editing"
+        destructive
+        onConfirm={() => blocker.proceed?.()}
+      />
     </div>
   );
 }
@@ -377,7 +480,13 @@ export function AgentEditorPage() {
   const { agentId } = useParams({ strict: false }) as { agentId: string };
   const creating = agentId === 'new';
   const query = useAgents();
-  if (creating) return <Editor key="new" agent={null} />;
+  const [template, setTemplate] = useState<AgentTemplate | null>(null);
+  if (creating)
+    return template ? (
+      <Editor key={template.id} agent={null} initial={template.definition} />
+    ) : (
+      <TemplatePicker onPick={setTemplate} />
+    );
   const agent = query.data?.find((a) => a.id === agentId) ?? null;
   return (
     <DataState
@@ -388,7 +497,9 @@ export function AgentEditorPage() {
       empty={<p>That agent does not exist.</p>}
       onRetry={() => void query.refetch()}
     >
-      {agent && <Editor key={agent.id} agent={agent} />}
+      {agent && (
+        <Editor key={agent.id} agent={agent} initial={agent.definition} />
+      )}
     </DataState>
   );
 }

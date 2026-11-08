@@ -6,6 +6,12 @@ import {
   signInAsOwner,
   setFakeAnthropicKey,
 } from './fixtures';
+import {
+  insertConnection,
+  insertModel,
+  setHeader,
+  startAgent,
+} from './agent-file';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -32,11 +38,6 @@ async function openAgents(page: Page) {
 
 const card = (page: Page, name: string) =>
   page.getByRole('listitem').filter({ hasText: name });
-
-async function choose(page: Page, label: string, option: string | RegExp) {
-  await page.getByRole('combobox', { name: label }).click();
-  await page.getByRole('option', { name: option }).click();
-}
 
 async function addClaudeConnection(page: Page, name: string) {
   await page.goto('/settings/providers');
@@ -88,20 +89,21 @@ test('offers to connect a provider when the selected provider has none', async (
   await expect(
     page.getByRole('heading', { name: 'New agent', level: 1 }),
   ).toBeVisible();
+  await page.getByRole('button', { name: /^Developer/ }).click();
   await expect(page.getByText('Claude connects with your own')).toBeVisible();
   await expect(
     page.getByRole('link', { name: 'Connect Claude' }),
   ).toBeVisible();
-  await choose(page, 'Provider', 'Codex');
+  await setHeader(page, { provider: 'codex' });
   await expect(
     page.getByText('Codex connects through a sign-in'),
   ).toBeVisible();
   await expect(page.getByRole('link', { name: 'Connect Codex' })).toBeVisible();
   await axeCheck(page);
-  await page.getByRole('button', { name: 'Create agent' }).click();
+  // the template leaves the name empty, so the file names the problem and its line
   await expect(
-    page.getByText('Enter a name of 1 to 80 characters.'),
-  ).toBeVisible();
+    page.getByRole('list', { name: 'Problems in the agent file' }),
+  ).toContainText('Line 2: Enter a name of 1 to 80 characters.');
 });
 
 test('creates a Claude agent and sees it ready', async ({
@@ -111,14 +113,13 @@ test('creates a Claude agent and sees it ready', async ({
   await setFakeAnthropicKey(request, testInfo.project.name, key, { models });
   await signInAsOwner(page);
   await addClaudeConnection(page, 'Agents Claude');
-  await page.goto('/agents/new');
-  await page.getByLabel('Name').fill('Alice');
-  await choose(page, 'Soul', /Developer \(Developer\)/);
-  await choose(page, 'Connection', 'Agents Claude');
+  await startAgent(page, 'Developer');
+  await setHeader(page, { name: 'Alice' });
+  await insertConnection(page, 'Agents Claude');
   await expect(
     page.getByRole('heading', { name: 'Models for this connection' }),
   ).toBeVisible();
-  await choose(page, 'Model', 'Claude Sonnet 5.5');
+  await insertModel(page, 'Claude Sonnet 5.5');
   await axeCheck(page);
   await page.getByRole('button', { name: 'Create agent' }).click();
   await expect(page).toHaveURL(/\/agents$/);
@@ -140,17 +141,13 @@ test('creates a Codex agent only after its model is checked', async ({
       'This account has no Codex models available',
     ),
   ).toBeVisible({ timeout: 60000 });
-  await page.goto('/agents/new');
-  await page.getByLabel('Name').fill('Bob');
-  await choose(page, 'Soul', /QA \(QA\)/);
-  await choose(page, 'Provider', 'Codex');
-  await choose(page, 'Connection', 'Agents Codex');
-  await page.getByRole('combobox', { name: 'Model' }).click();
-  await expect(page.getByRole('option', { name: /Astra/ })).toHaveAttribute(
-    'aria-disabled',
-    'true',
-  );
-  await page.keyboard.press('Escape');
+  await startAgent(page, 'QA');
+  await setHeader(page, { name: 'Bob', provider: 'codex' });
+  await insertConnection(page, 'Agents Codex');
+  // no model is verified yet, so none can be inserted
+  await expect(
+    page.getByRole('combobox', { name: 'Insert model' }),
+  ).toBeDisabled();
   await page
     .getByRole('button', { name: 'Check availability for Astra' })
     .click();
@@ -160,7 +157,7 @@ test('creates a Codex agent only after its model is checked', async ({
       .getByText(/^Available/)
       .first(),
   ).toBeVisible({ timeout: 30000 });
-  await choose(page, 'Model', 'Astra');
+  await insertModel(page, 'Astra');
   await page.getByRole('button', { name: 'Create agent' }).click();
   await expect(page).toHaveURL(/\/agents$/);
   await expect(card(page, 'Bob').getByText('Ready')).toBeVisible();
@@ -169,7 +166,7 @@ test('creates a Codex agent only after its model is checked', async ({
 test('changes an agent model', async ({ page }) => {
   await openAgents(page);
   await card(page, 'Alice').getByRole('link', { name: 'Edit Alice' }).click();
-  await choose(page, 'Model', 'Claude Opus 5.5');
+  await insertModel(page, 'Claude Opus 5.5');
   await page.getByRole('button', { name: 'Save changes' }).click();
   await expect(page).toHaveURL(/\/agents$/);
   await expect(card(page, 'Alice').getByText('claude-opus-5-5')).toBeVisible();
