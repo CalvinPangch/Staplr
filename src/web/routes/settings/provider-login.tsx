@@ -77,6 +77,19 @@ export function ProviderLoginPage() {
         terminal.blur();
         return false;
       }
+      // Ctrl+C (Cmd+C) with text selected copies it, as in other web terminals.
+      // Sending it to the sandbox would stop the Codex login half way.
+      const copy =
+        (event.ctrlKey || event.metaKey) &&
+        !event.shiftKey &&
+        event.key.toLowerCase() === 'c';
+      if (copy && terminal.hasSelection()) {
+        if (event.type === 'keydown')
+          void navigator.clipboard
+            ?.writeText(terminal.getSelection())
+            .catch(() => undefined);
+        return false;
+      }
       return true;
     });
     const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
@@ -262,7 +275,9 @@ export function ProviderLoginPage() {
                   <div ref={host} />
                 </div>
                 <p className="text-sm text-muted">
-                  Press Escape to leave the terminal and reach the buttons.
+                  Press Escape to leave the terminal and reach the buttons. To
+                  copy the code, select it and press Ctrl+C. Without a
+                  selection, Ctrl+C stops the login and you have to start again.
                 </p>
               </>
             )}
