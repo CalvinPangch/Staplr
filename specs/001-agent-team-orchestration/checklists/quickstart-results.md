@@ -30,3 +30,12 @@ Final automated gates on this date: typecheck, lint, format:check clean; unit, i
 contract 326+ tests passing; Docker tests 9 passing; Playwright 154 passing (desktop and 320 px,
 axe on every screen); `npm audit --audit-level=high` clean (moderate dev-tool advisories remain,
 tracked in research.md).
+
+## Scenarios run by hand against the production build (2026-11-08)
+
+- **15 (HTTPS requirement): run.** `PUBLIC_URL=http://192.168.1.5:4399` without the override stopped
+  with "HTTPS is required for non-local PUBLIC_URL" (exit 1). With `STAPLR_ALLOW_INSECURE_HTTP=1` it
+  logged the unencrypted-traffic warning and listened. The sign-in banner is covered by the
+  Playwright suite, not looked at by eye.
+- The remaining scenarios were not run by hand. T152 and T154 stay open: they need a person, and
+  scenario 4 needs a real ChatGPT account for the Codex login.
