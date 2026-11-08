@@ -83,6 +83,13 @@ export const providerConnections = sqliteTable('provider_connection', {
   status: text('status', { enum: ['connected', 'needs_relogin'] }).notNull(),
   lastCheckedAt: text('lastCheckedAt'),
   lastCheckResult: text('lastCheckResult'),
+  discoveryStatus: text('discoveryStatus', {
+    enum: ['not_started', 'running', 'finished', 'failed'],
+  })
+    .notNull()
+    .default('not_started'),
+  discoveryError: text('discoveryError'),
+  modelsRefreshedAt: text('modelsRefreshedAt'),
   createdAt: text('createdAt').notNull(),
   updatedAt: text('updatedAt').notNull(),
 });
@@ -197,7 +204,7 @@ export const modelPrices = sqliteTable('model_price', {
   effectiveFrom: text('effectiveFrom').notNull(),
   // null means this is the current price
   effectiveUntil: text('effectiveUntil'),
-  source: text('source', { enum: ['default', 'user'] }).notNull(),
+  source: text('source', { enum: ['default', 'user', 'official'] }).notNull(),
 });
 export const tickets = sqliteTable('ticket', {
   id: text('id').primaryKey(),
@@ -212,4 +219,16 @@ export const tickets = sqliteTable('ticket', {
   createdAt: text('createdAt').notNull(),
   updatedAt: text('updatedAt').notNull(),
   statusChangedAt: text('statusChangedAt').notNull(),
+});
+export const discoveredModels = sqliteTable('discovered_model', {
+  providerConnectionId: text('providerConnectionId').notNull(),
+  model: text('model').notNull(),
+  label: text('label').notNull(),
+  listedAt: text('listedAt').notNull(),
+});
+export const priceRefresh = sqliteTable('price_refresh', {
+  provider: text('provider', { enum: ['claude', 'codex'] }).primaryKey(),
+  lastAttemptAt: text('lastAttemptAt'),
+  lastSuccessAt: text('lastSuccessAt'),
+  lastError: text('lastError'),
 });

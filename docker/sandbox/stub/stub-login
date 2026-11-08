@@ -1,22 +1,23 @@
 #!/bin/sh
 # Prints a fake device-login prompt, then waits for a line "OK [expired=true]
-# [denied=a,b] [transient=1] [expires_at=ISO]" and writes a fake auth.json.
+# [denied=a,b] [transient=1] [expires_at=ISO] [models=a,b]" and writes a fake auth.json.
 echo "Open https://auth.stub.invalid/device and enter code STUB-1234"
 while IFS= read -r line; do
   case "$line" in
     OK|OK\ *)
-      expired=false; denied=""; transient=false; expires_at=null
+      expired=false; denied=""; transient=false; expires_at=null; models=""
       for pair in ${line#OK}; do
         case "$pair" in
           expired=true) expired=true ;;
           denied=*) denied="${pair#denied=}" ;;
           transient=1) transient=true ;;
           expires_at=*) expires_at="\"${pair#expires_at=}\"" ;;
+          models=*) models="${pair#models=}" ;;
         esac
       done
       mkdir -p "$HOME/.codex"
-      printf '{"tokens":{"access_token":"stub-secret-%s"},"expired":%s,"denied":"%s","transient":%s,"expires_at":%s}\n' \
-        "$$" "$expired" "$denied" "$transient" "$expires_at" > "$HOME/.codex/auth.json"
+      printf '{"tokens":{"access_token":"stub-secret-%s"},"expired":%s,"denied":"%s","transient":%s,"expires_at":%s,"models":"%s"}\n' \
+        "$$" "$expired" "$denied" "$transient" "$expires_at" "$models" > "$HOME/.codex/auth.json"
       : > "$HOME/.codex/.local-login"
       echo "Login complete."
       ;;

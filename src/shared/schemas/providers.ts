@@ -6,6 +6,14 @@ import {
   providers,
 } from '../status.js';
 
+export const discoveryStatuses = [
+  'not_started',
+  'running',
+  'finished',
+  'failed',
+] as const;
+export type DiscoveryStatus = (typeof discoveryStatuses)[number];
+
 const nameSchema = z
   .string()
   .trim()
@@ -43,6 +51,10 @@ export const providerConnectionSchema = z.object({
   credentialExpiresAt: z.string().nullable(),
   lastCheckedAt: z.string().nullable(),
   lastCheckResult: z.string().nullable(),
+  /** Codex only: finding out which models this login can use. Claude stays not_started. */
+  discoveryStatus: z.enum(discoveryStatuses),
+  discoveryError: z.string().nullable(),
+  modelsRefreshedAt: z.string().nullable(),
 });
 export type ProviderConnection = z.infer<typeof providerConnectionSchema>;
 
@@ -56,5 +68,19 @@ export const modelAccessSchema = z.object({
   lastVerifiedAt: z.string().nullable(),
   lastAttemptAt: z.string().nullable(),
   checkError: z.string().nullable(),
+  /** listed by the provider for this login (not only in Staplr's shipped catalog) */
+  discovered: z.boolean().optional(),
+  /** discovery is running and this model has no answer yet */
+  checking: z.boolean().optional(),
+  price: z
+    .object({
+      inputPricePerMTok: z.string().nullable(),
+      outputPricePerMTok: z.string().nullable(),
+      priceSource: z.string().nullable(),
+      pricesAsOf: z.string().nullable(),
+      label: z.literal('List price used for estimates'),
+      note: z.string().nullable(),
+    })
+    .optional(),
 });
 export type ModelAccess = z.infer<typeof modelAccessSchema>;

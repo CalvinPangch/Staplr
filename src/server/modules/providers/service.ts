@@ -4,6 +4,7 @@ import type { Config } from '../../config.js';
 import { openBlob, sealToBlob } from '../../lib/crypto.js';
 import { ServiceError } from '../../lib/problem.js';
 import type {
+  DiscoveryStatus,
   ClaudeCreate,
   ModelAccess,
   ProviderConnection,
@@ -27,6 +28,9 @@ interface Row {
   status: 'connected' | 'needs_relogin';
   lastCheckedAt: string | null;
   lastCheckResult: string | null;
+  discoveryStatus: DiscoveryStatus;
+  discoveryError: string | null;
+  modelsRefreshedAt: string | null;
 }
 
 const batchSize = 5;
@@ -68,6 +72,9 @@ export function createProviderService({
     credentialExpiresAt: row.credentialExpiresAt,
     lastCheckedAt: row.lastCheckedAt,
     lastCheckResult: row.lastCheckResult,
+    discoveryStatus: row.discoveryStatus,
+    discoveryError: row.discoveryError,
+    modelsRefreshedAt: row.modelsRefreshedAt,
   });
 
   const find = (id: string) =>

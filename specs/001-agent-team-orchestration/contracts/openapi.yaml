@@ -189,10 +189,20 @@ paths:
   /api/provider-connections/{id}/check:
     parameters: [ { $ref: '#/components/parameters/Id' } ]
     post:
-      summary: Check authentication and assigned model access (research R6)
+      summary: Check authentication and assigned model access (research R6); for Codex also rediscovers models (feature 002)
       responses:
         '200': { description: Result, content: { application/json: { schema: { $ref: '#/components/schemas/ProviderConnection' } } } }
         '404': { $ref: '#/components/responses/Problem' }
+  /api/provider-connections/{id}/discover:
+    parameters: [ { $ref: '#/components/parameters/Id' } ]
+    post:
+      summary: Refresh models — list and check every model this Codex login can use (feature 002)
+      description: A request while discovery is already running joins it; no second run starts.
+      responses:
+        '202': { description: Discovery running, content: { application/json: { schema: { $ref: '#/components/schemas/ProviderConnection' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
   /api/sandbox-sessions:
     post:
       summary: Start a Codex sandbox login session (see sandbox-terminal.md)
@@ -312,6 +322,8 @@ paths:
                 properties:
                   catalogRevision: { type: string }
                   models: { type: array, items: { $ref: '#/components/schemas/ModelAccess' } }
+                  discoveryStatus: { type: string, enum: [not_started, running, finished, failed], description: Feature 002; Codex connections only change it }
+                  modelsRefreshedAt: { type: [string, 'null'], format: date-time }
         '404': { $ref: '#/components/responses/Problem' }
         '422': { $ref: '#/components/responses/Problem' }
 
@@ -523,6 +535,17 @@ paths:
         '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/ModelPrice' } } } }
         '422': { $ref: '#/components/responses/Problem' }
 
+  /api/prices/status:
+    get:
+      summary: When each provider's official pricing page was last read (feature 002)
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/PriceStatus' } } } }
+  /api/prices/refresh:
+    post:
+      summary: Read the official pricing pages now (feature 002); a request while a read runs does not start another
+      responses:
+        '202': { description: Read started, content: { application/json: { schema: { $ref: '#/components/schemas/PriceStatus' } } } }
+
   # ---------- Audit + diagnostics (FR-041, R12) ----------
   /api/audit-entries:
     get:
@@ -618,10 +641,23 @@ components:
         lastVerifiedAt: { type: [string, 'null'], format: date-time }
         lastAttemptAt: { type: [string, 'null'], format: date-time }
         checkError: { type: [string, 'null'], description: Bounded secret-free error code; no raw provider response }
+        discovered: { type: boolean, description: Listed by the provider for this login (feature 002) }
+        checking: { type: boolean, description: Discovery is running and this model has no answer yet }
+        price:
+          type: object
+          additionalProperties: false
+          required: [inputPricePerMTok, outputPricePerMTok, priceSource, pricesAsOf, label, note]
+          properties:
+            inputPricePerMTok: { type: [string, 'null'], description: USD per 1M input tokens; null = Unknown }
+            outputPricePerMTok: { type: [string, 'null'] }
+            priceSource: { type: [string, 'null'], format: uri }
+            pricesAsOf: { type: [string, 'null'], format: date }
+            label: { type: string, const: 'List price used for estimates' }
+            note: { type: [string, 'null'], description: 'For Codex: "API list price; your plan may not charge per token"' }
     ProviderConnection:
       type: object
       additionalProperties: false
-      required: [id, provider, name, authType, credentialRevision, status, credentialExpiresAt, lastCheckedAt, lastCheckResult]
+      required: [id, provider, name, authType, credentialRevision, status, credentialExpiresAt, lastCheckedAt, lastCheckResult, discoveryStatus, discoveryError, modelsRefreshedAt]
       properties:
         id: { type: string }
         provider: { $ref: '#/components/schemas/Provider' }
@@ -632,6 +668,9 @@ components:
         credentialExpiresAt: { type: [string, 'null'], format: date-time }
         lastCheckedAt: { type: [string, 'null'], format: date-time }
         lastCheckResult: { type: [string, 'null'] }
+        discoveryStatus: { type: string, enum: [not_started, running, finished, failed], description: Codex only; finding out which models this login can use (feature 002) }
+        discoveryError: { type: [string, 'null'], description: Short, secret-free reason when discoveryStatus is failed }
+        modelsRefreshedAt: { type: [string, 'null'], format: date-time, description: Last successful model discovery }
     Impact:
       type: object
       properties:
@@ -757,10 +796,25 @@ components:
         outputPricePerMTok: { type: [string, 'null'] }
         effectiveFrom: { type: string, format: date-time }
         effectiveUntil: { type: [string, 'null'], format: date-time }
-        source: { type: string, enum: [default, user] }
+        source: { type: string, enum: [default, user, official], description: official = read from the provider's pricing page (feature 002); default and user remain as history }
         priceSource: { type: [string, 'null'], format: uri, description: Pricing page the default price was copied from }
         pricesAsOf: { type: [string, 'null'], format: date, description: Date the default price was copied }
         label: { type: string, const: 'List price used for estimates' }
+    PriceStatus:
+      type: object
+      required: [providers]
+      properties:
+        providers:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [provider, lastAttemptAt, lastSuccessAt, lastError]
+            properties:
+              provider: { $ref: '#/components/schemas/Provider' }
+              lastAttemptAt: { type: [string, 'null'], format: date-time }
+              lastSuccessAt: { type: [string, 'null'], format: date-time }
+              lastError: { type: [string, 'null'] }
     ErrorEvent:
       type: object
       required: [id, at, requestId, route, message]
@@ -776,7 +830,7 @@ components:
       properties:
         id: { type: string }
         at: { type: string, format: date-time }
-        action: { type: string, enum: [scc.added, scc.replaced, scc.removed, provider.added, provider.replaced, provider.relogged, provider.removed, soul.created, soul.updated, soul.copied, soul.deleted, agent.created, agent.updated, agent.deleted, project.created, project.deleted, price.changed] }
+        action: { type: string, enum: [scc.added, scc.replaced, scc.removed, provider.added, provider.replaced, provider.relogged, provider.removed, soul.created, soul.updated, soul.copied, soul.deleted, agent.created, agent.updated, agent.deleted, project.created, project.deleted, price.changed, models.discovered, prices.refreshed] }
         targetType: { type: string }
         targetId: { type: string }
         targetName: { type: string }

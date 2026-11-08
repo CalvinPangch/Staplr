@@ -10,7 +10,7 @@ import type {
 
 /**
  * An in-memory SandboxDriver that behaves like docker/sandbox/stub.Dockerfile:
- * typing "OK [expired=true] [denied=a,b] [transient=1] [expires_at=ISO]" in the
+ * typing "OK [expired=true] [denied=a,b] [transient=1] [expires_at=ISO] [models=a,b]" in the
  * terminal "signs in" and writes a credential file; stub-status and stub-probe
  * read it. The real shell stub is exercised by the Docker tests.
  */
@@ -46,6 +46,14 @@ const exit = (exitCode: number): ExecResult => ({
   timedOut: false,
 });
 
+/** The models the stub lists when the login did not name any (the shipped Codex catalog). */
+const defaultModels = [
+  'gpt-6-astra',
+  'gpt-6.1-sol',
+  'gpt-6.1-terra',
+  'gpt-6-luna',
+];
+
 export function createFakeSandboxDriver(): FakeSandboxDriver {
   const containers = new Map<string, FakeContainer>();
   const commands: string[][] = [];
@@ -61,6 +69,7 @@ export function createFakeSandboxDriver(): FakeSandboxDriver {
       expired?: boolean;
       denied?: string[];
       transient?: boolean;
+      models?: string[];
     };
 
   const driver: FakeSandboxDriver = {
@@ -110,6 +119,7 @@ export function createFakeSandboxDriver(): FakeSandboxDriver {
               denied: (options['denied'] ?? '').split(',').filter(Boolean),
               transient: options['transient'] === '1',
               expires_at: options['expires_at'] ?? null,
+              models: (options['models'] ?? '').split(',').filter(Boolean),
             });
             container.signedInHere = true;
             output.write('Login complete.\r\n');
@@ -148,6 +158,31 @@ export function createFakeSandboxDriver(): FakeSandboxDriver {
         if (!content) return exit(1);
         container.authJson = content.toString('utf8');
         return ok();
+      }
+      if (program === 'stub-models') {
+        const state = container.authJson ? parse(container.authJson) : {};
+        if (state.transient) return exit(75);
+        const listed = state.models?.length ? state.models : defaultModels;
+        return ok(
+          Buffer.from(
+            JSON.stringify({
+              models: [
+                ...listed.map((slug) => ({
+                  slug,
+                  display_name: `Stub ${slug}`,
+                  visibility: 'list',
+                  supported_in_api: true,
+                })),
+                {
+                  slug: 'stub-hidden',
+                  display_name: 'Hidden',
+                  visibility: 'hide',
+                  supported_in_api: true,
+                },
+              ],
+            }),
+          ),
+        );
       }
       if (program === 'stub-status' || program === 'stub-probe') {
         if (!container.authJson) return exit(1);

@@ -1,0 +1,16 @@
+#!/bin/sh
+# Fake "codex debug models": prints a JSON model catalog. The listed models come from the
+# "models=" option of the stub login when signed in, otherwise a default list. One hidden
+# entry is always included. Exit 75 when the login was made with transient=1.
+f="$HOME/.codex/auth.json"
+list=""
+if [ -f "$f" ]; then
+  grep -q '"transient":true' "$f" && exit 75
+  list=$(sed -n 's/.*"models":"\([^"]*\)".*/\1/p' "$f")
+fi
+[ -z "$list" ] && list="gpt-6-astra,gpt-6.1-sol,gpt-6.1-terra,gpt-6-luna"
+printf '{"models":['
+for m in $(echo "$list" | tr ',' ' '); do
+  printf '{"slug":"%s","display_name":"Stub %s","visibility":"list","supported_in_api":true},' "$m" "$m"
+done
+printf '{"slug":"stub-hidden","display_name":"Hidden","visibility":"hide","supported_in_api":true}]}\n'
