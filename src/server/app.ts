@@ -162,6 +162,11 @@ export function buildApp({
       .type('application/problem+json')
       .send({ code: 'internal_error', message });
   });
+  // Test mode only: lets the browser test prove that failures are captured without secrets.
+  if (config.testMode)
+    app.get('/api/__test/fail', () => {
+      throw new Error('e2e-private-secret');
+    });
   authRoutes(app, db, config, clock);
   auditRoutes(app, db);
   diagnosticsRoutes(app, db);

@@ -22,6 +22,16 @@ const actionLabels: Record<string, string> = {
   'provider.replaced': 'Provider credentials replaced',
   'provider.relogged': 'Provider re-login completed',
   'provider.removed': 'Provider connection removed',
+  'soul.created': 'Soul created',
+  'soul.updated': 'Soul edited',
+  'soul.copied': 'Soul copied',
+  'soul.deleted': 'Soul deleted',
+  'agent.created': 'Agent created',
+  'agent.updated': 'Agent edited',
+  'agent.deleted': 'Agent deleted',
+  'project.created': 'Project added',
+  'project.deleted': 'Project deleted',
+  'price.changed': 'Model price changed',
 };
 
 export function AuditPage() {

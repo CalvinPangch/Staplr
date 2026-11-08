@@ -22,6 +22,7 @@ const navItems = [
   { to: '/agents', label: 'Agents' },
   { to: '/model-prices', label: 'Prices' },
   { to: '/audit', label: 'Audit' },
+  { to: '/diagnostics', label: 'Diagnostics' },
 ] as const;
 
 function InsecureBanner() {

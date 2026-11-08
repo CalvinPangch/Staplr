@@ -357,11 +357,11 @@ Rerun the completed T143–T148 suites across all stories. Their definitions and
 expected failing run occur before production implementation as specified in Foundation.
 Do not introduce first-time security, state, accessibility or performance coverage here.
 
-- [ ] T149 [P] E2E test for the Diagnostics page in `tests/e2e/diagnostics.spec.ts`: empty state; after triggering a test-only failing route, the page lists the error with time, route, request ID and message, and no secret values; axe check
-- [ ] T150 Create `src/web/routes/diagnostics.tsx` (list of locally captured errors newest first, expandable redacted stack, `DataState` for loading/empty/error) to pass T149
-- [ ] T151 [P] Write `README.md`: install with Docker Compose, generating and **backing up** `STAPLR_MASTER_KEY` (losing it makes saved tokens and logins unrecoverable), backing up the `staplr-data` volume, reaching Staplr from another computer over HTTPS (`PUBLIC_URL`, the `https` profile, and why plain HTTP is refused), building sandbox images, the provider authentication/billing distinction and official sources from research R18, troubleshooting from quickstart.md
+- [X] T149 [P] E2E test for the Diagnostics page in `tests/e2e/diagnostics.spec.ts`: empty state; after triggering a test-only failing route, the page lists the error with time, route, request ID and message, and no secret values; axe check
+- [X] T150 Create `src/web/routes/diagnostics.tsx` (list of locally captured errors newest first, expandable redacted stack, `DataState` for loading/empty/error) to pass T149
+- [X] T151 [P] Write `README.md`: install with Docker Compose, generating and **backing up** `STAPLR_MASTER_KEY` (losing it makes saved tokens and logins unrecoverable), backing up the `staplr-data` volume, reaching Staplr from another computer over HTTPS (`PUBLIC_URL`, the `https` profile, and why plain HTTP is refused), building sandbox images, the provider authentication/billing distinction and official sources from research R18, troubleshooting from quickstart.md
 - [ ] T152 **Manual task for a person, not the implementing agent**: run the SC-005 usability check with 5 test users following quickstart.md scenario 4 (Codex), completing login before testing cancellation in a separate session without help; record pass/fail per user and any confusion points in `specs/001-agent-team-orchestration/checklists/usability-sc005.md` (target: at least 4 of 5 succeed first time)
-- [ ] T153 Run `npm audit --audit-level=high`, `typecheck`, `lint`, `format:check`, and all test suites (`test`, `test:docker`, `test:e2e`) defined in `package.json`, and fix any findings in the affected `src/` files without weakening tests
+- [X] T153 Run `npm audit --audit-level=high`, `typecheck`, `lint`, `format:check`, and all test suites (`test`, `test:docker`, `test:e2e`) defined in `package.json`, and fix any findings in the affected `src/` files without weakening tests
 - [ ] T154 Execute every manual scenario in `specs/001-agent-team-orchestration/quickstart.md` and record results in `specs/001-agent-team-orchestration/checklists/quickstart-results.md`
 
 ---
