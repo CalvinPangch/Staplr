@@ -817,13 +817,14 @@ export function createProviderService({
             const row = find(id);
             if (!row) return;
             await checkRow(row);
-            // Codex: re-list for free; only models agents use were probed above.
+            // Codex: re-list for free in the background; only models agents
+            // use were probed above, so the check itself stays fast.
             const after = find(id);
             if (
               after?.authType === 'codex_login' &&
               after.status === 'connected'
             )
-              await startDiscovery(id, { listOnly: true });
+              void startDiscovery(id, { listOnly: true });
           }),
         );
     },

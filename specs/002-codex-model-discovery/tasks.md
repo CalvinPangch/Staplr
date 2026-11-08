@@ -133,8 +133,8 @@ the agent form; the Prices screen is gone; "Refresh prices" updates "Prices last
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T037 [P] Update `README.md` and `docker/sandbox/README.md`: model discovery, the allowance note, official price sources and refresh schedule; remove mentions of editing prices
-- [ ] T038 [P] Opt-in live check `tests/integration/official-prices-live.test.ts` (runs only with `STAPLR_LIVE_PRICES=1`) that reads both live pages and asserts at least 3 parsed rows each
+- [X] T037 [P] Update `README.md` and `docker/sandbox/README.md`: model discovery, the allowance note, official price sources and refresh schedule; remove mentions of editing prices
+- [X] T038 [P] Opt-in live check `tests/integration/official-prices-live.test.ts` (runs only with `STAPLR_LIVE_PRICES=1`) that reads both live pages and asserts at least 3 parsed rows each
 - [ ] T039 Run all gates: `typecheck`, `lint`, `format:check`, `npm test`, `npm run test:docker`, `npm run test:e2e`, `npm audit --audit-level=high`; fix findings without weakening tests; feature 001's Claude tests must still pass unchanged (FR-012)
 - [ ] T040 **Manual task for a person**: run the scenarios in `specs/002-codex-model-discovery/quickstart.md` with a real ChatGPT account (device-code sign-in enabled) and record results in `specs/002-codex-model-discovery/checklists/quickstart-results.md`, including whether `codex debug models` lists account-specific models after login (research R1)
 

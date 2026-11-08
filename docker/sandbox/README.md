@@ -36,11 +36,17 @@ Run in a container with a read-only root and a tmpfs home as user 1000:
   `-c cli_auth_credentials_store="file"` is accepted.
 - `codex login status` with no login prints `Not logged in` and exits `1`.
 - `codex exec --help` lists `--model` and `--skip-git-repo-check`.
+- `codex debug models` prints a JSON catalog `{"models":[{"slug","display_name","visibility",…}]}`
+  (logged out: the bundled catalog). Staplr lists entries with `visibility` `list` and checks
+  each with `codex exec --model <id>` at `model_reasoning_effort="low"` (feature 002).
 
 ## What is NOT verified
 
 No live Codex login, status-after-login, exact-model probe, refreshed-token behavior or
 resource-limit run has been performed: that needs a real ChatGPT account. Until it is done:
+
+- Whether `codex debug models` lists account-specific models after login (rather than only the
+  bundled catalog) is not observed; the per-model check decides availability either way.
 
 - The auth file location `~/.codex/auth.json` with the file credential store is taken from the
   Codex documentation, not observed.

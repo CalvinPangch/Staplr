@@ -96,9 +96,17 @@ it('checks 20 connections (10 stub Codex + 10 fake source control) within 60 s',
       expect(done.statusCode).toBe(200);
       socket.close();
     }
+    // Model discovery after each sign-in is measured on its own (SC-002,
+    // model-discovery.test.ts); this goal is about the checks.
+    const discoveryBegan = performance.now();
+    await f.app.providers.whenDiscoveryIdle();
+    console.log(
+      `sign-in discovery for 10 logins took ${Math.round(performance.now() - discoveryBegan)} ms`,
+    );
     const began = performance.now();
     await f.scheduler.runAll();
     expect(performance.now() - began).toBeLessThan(60_000);
+    await f.app.providers.whenDiscoveryIdle();
     const connections = (
       await f.call('GET', '/api/provider-connections')
     ).json() as { status: string }[];

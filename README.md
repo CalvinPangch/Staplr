@@ -50,6 +50,20 @@ warning and shows a banner on every page.
   root, no capabilities, 512 MiB, 1 CPU). The resulting login is stored encrypted and reused.
   Codex uses your account's allowance, so list-price estimates may differ from what you are
   charged.
+- **Codex models are found for you.** Right after a Codex sign-in, Staplr lists the models the
+  login can see (`codex debug models`) and checks each one with one very short request (about
+  10 in all, at most two at a time). The Providers screen shows "Discovering models…", then
+  how many are available; "Show models" lists them and "Refresh models" finds them again. A
+  re-login and "Check now" rediscover; the hourly check only re-lists (free) and checks the
+  models your agents use. A model Staplr has never heard of is remembered and can be chosen.
+- **Prices come from the official pages only:** Anthropic's
+  [pricing page](https://platform.claude.com/docs/en/about-claude/pricing.md) for Claude and
+  OpenAI's [API pricing page](https://developers.openai.com/api/docs/pricing.md) for Codex
+  (labelled "API list price; your plan may not charge per token"). They are read at start-up,
+  then once a day, and on "Refresh prices" on the Providers screen, which also shows when they
+  were last updated. A price change applies from the moment it is found; earlier estimates keep
+  their price. A model the page does not list shows "Unknown", never zero. Prices cannot be
+  entered by hand, and if a page cannot be read the last prices found are kept.
 - Every money figure in Staplr is an **estimate from list prices**, never an invoice.
 
 What was and was not verified against the real Codex CLI is recorded in
@@ -57,6 +71,10 @@ What was and was not verified against the real Codex CLI is recorded in
 [Claude guidance](https://code.claude.com/docs/en/legal-and-compliance),
 [Claude Models API](https://platform.claude.com/docs/en/api/models/list),
 [Codex authentication](https://developers.openai.com/codex/auth).
+
+Besides the GitHub/GitLab APIs, `api.anthropic.com` and Docker, the only hosts Staplr itself
+contacts are `platform.claude.com` and `developers.openai.com`, to read the two pricing pages
+(no credentials are sent).
 
 ## Development
 
@@ -72,7 +90,9 @@ npm run test:e2e             # Playwright + axe, desktop and 320 px, plus the bo
 
 `npm run seed:board -- --project <id> --count 200` adds sample tickets (refused when
 `NODE_ENV=production`). Specs, plan, tasks and manual validation scenarios live in
-`specs/001-agent-team-orchestration/`.
+`specs/001-agent-team-orchestration/` and `specs/002-codex-model-discovery/` (model discovery
+and official prices). `STAPLR_LIVE_PRICES=1 npx vitest run tests/integration/official-prices-live.test.ts`
+reads the live pricing pages to confirm they still parse.
 
 ## Troubleshooting
 
